@@ -14,10 +14,9 @@ import (
 	"time"
 )
 
-func init() { runtime.GOMAXPROCS(runtime.NumCPU()) }
 func main() {
-
 	start := time.Now()
+
 	// targetFolder := flag.String("f", "owner/repo", "folder containing sprites")
 	// flag.Parse()
 	// fmt.Printf(*targetFolder)
@@ -36,10 +35,10 @@ func main() {
 	var decoded_images_chunked [][]image.Image
 	var decoded_sprites []image.Image
 	var chunked_sprite_dir_entries [][]fs.DirEntry
-	if runtime.NumCPU() > 4 && runtime.NumCPU()%4 == 0 {
+	if runtime.NumCPU() > 12 && runtime.NumCPU()%4 == 0 {
 		chunked_sprite_dir_entries = chunkSpriteDirEntries(sprites_folder, runtime.NumCPU()/4)
 	} else {
-		chunked_sprite_dir_entries = chunkSpriteDirEntries(sprites_folder, runtime.NumCPU())
+		chunked_sprite_dir_entries = chunkSpriteDirEntries(sprites_folder, 6)
 	}
 
 	var chunk_images_waitgroup sync.WaitGroup
@@ -102,14 +101,13 @@ func decodeImages(sprites_folder []fs.DirEntry, pwd string, wg *sync.WaitGroup) 
 	defer wg.Done()
 	var sprites_array []image.Image
 	for _, sprite := range sprites_folder {
-		// fmt.Println(sprite)
 		if reader, err := os.Open(filepath.Join(pwd, "sprites", sprite.Name())); err == nil {
-			defer reader.Close()
 			m, _, err := image.Decode(reader)
 			if err != nil {
 				log.Fatal(err)
 			}
 			sprites_array = append(sprites_array, m)
+			reader.Close()
 		}
 	}
 	return sprites_array
