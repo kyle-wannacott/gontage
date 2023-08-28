@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"image"
 	"image/draw"
@@ -16,10 +17,8 @@ import (
 
 func main() {
 	start := time.Now()
-
-	// targetFolder := flag.String("f", "owner/repo", "folder containing sprites")
-	// flag.Parse()
-	// fmt.Printf(*targetFolder)
+	targetFolder := flag.String("f", "sprites", "folder containing sprites")
+	flag.Parse()
 
 	pwd, err := os.Getwd()
 	if err != nil {
@@ -27,61 +26,49 @@ func main() {
 		os.Exit(1)
 	}
 
-	sprites_folder, err := os.ReadDir(filepath.Join(pwd, "sprites"))
+	sprites_folder, err := os.ReadDir(filepath.Join(pwd, *targetFolder))
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	var decoded_images_chunked [][]image.Image
-	var decoded_sprites []image.Image
-	var chunked_sprite_dir_entries [][]fs.DirEntry
+	var all_decoded_images []image.Image
+	var chunked_sprite_names [][]fs.DirEntry
 	if runtime.NumCPU() > 12 && runtime.NumCPU()%4 == 0 {
-		chunked_sprite_dir_entries = chunkSpriteDirEntries(sprites_folder, runtime.NumCPU()/4)
+		chunked_sprite_names = sliceChunker(sprites_folder, runtime.NumCPU()/4)
 	} else {
-		chunked_sprite_dir_entries = chunkSpriteDirEntries(sprites_folder, 6)
+		chunked_sprite_names = sliceChunker(sprites_folder, 6)
 	}
 
 	var chunk_images_waitgroup sync.WaitGroup
-	for _, chunked_sprites_entry := range chunked_sprite_dir_entries {
+	for _, chunked_sprite_name := range chunked_sprite_names {
 		chunk_images_waitgroup.Add(1)
-		go func(chunked_sprites_entry []fs.DirEntry) {
-			one_chunk_of_decoded_images := decodeImages(chunked_sprites_entry, pwd, &chunk_images_waitgroup)
+		go func(chunked_sprite_name []fs.DirEntry) {
+			one_chunk_of_decoded_images := decodeImages(chunked_sprite_name, *targetFolder, pwd, &chunk_images_waitgroup)
 			decoded_images_chunked = append(decoded_images_chunked, one_chunk_of_decoded_images)
-		}(chunked_sprites_entry)
+		}(chunked_sprite_name)
 	}
 	chunk_images_waitgroup.Wait()
+
 	for _, image := range decoded_images_chunked {
-		decoded_sprites = append(decoded_sprites, image...)
+		all_decoded_images = append(all_decoded_images, image...)
 	}
 
-	// old way
-	// wg.Add(1)
-	// go func() {
-	// 	sprites1 = decodeImages(sprites_folder[:mid], pwd, &wg)
-	// }()
-	// wg.Add(1)
-	// go func() {
-	// 	sprites2 = decodeImages(sprites_folder[mid:], pwd, &wg)
-	// }()
-
-	// sprites = append(sprites, sprites1...)
-	// sprites = append(sprites, sprites2...)
-
 	hframes := 8
-	vframes := 12
+	vframes := (len(sprites_folder) / hframes) + 1
+	fmt.Println(vframes)
 	spritesheet_height := 128 * hframes
 	spritesheet_width := 128 * vframes
-	spritesheet := image.NewRGBA(image.Rect(0, 0, spritesheet_height, spritesheet_width))
+	spritesheet := image.NewRGBA(image.Rect(0, 0, spritesheet_height, int(spritesheet_width)))
 	draw.Draw(spritesheet, spritesheet.Bounds(), spritesheet, image.Point{}, draw.Src)
-
-	decoded_sprites_chunked := chunkDecodedSprites(decoded_sprites, hframes)
+	decoded_images_to_draw_chunked := sliceChunker(all_decoded_images, hframes)
 
 	var make_spritesheet_wg sync.WaitGroup
-	for count_vertical_frames, sprite_chunk := range decoded_sprites_chunked {
+	for count_vertical_frames, sprite_chunk := range decoded_images_to_draw_chunked {
 		make_spritesheet_wg.Add(1)
 		go func(count_vertical_frames int, sprite_chunk []image.Image) {
 			defer make_spritesheet_wg.Done()
-			paintSpritesheet(sprite_chunk, hframes, vframes, count_vertical_frames, spritesheet)
+			paintSpritesheet(sprite_chunk, hframes, int(vframes), count_vertical_frames, spritesheet)
 		}(count_vertical_frames, sprite_chunk)
 	}
 	make_spritesheet_wg.Wait()
@@ -97,11 +84,11 @@ func main() {
 	fmt.Println(time.Since(start))
 }
 
-func decodeImages(sprites_folder []fs.DirEntry, pwd string, wg *sync.WaitGroup) []image.Image {
+func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string, wg *sync.WaitGroup) []image.Image {
 	defer wg.Done()
 	var sprites_array []image.Image
 	for _, sprite := range sprites_folder {
-		if reader, err := os.Open(filepath.Join(pwd, "sprites", sprite.Name())); err == nil {
+		if reader, err := os.Open(filepath.Join(pwd, targetFolder, sprite.Name())); err == nil {
 			m, _, err := image.Decode(reader)
 			if err != nil {
 				log.Fatal(err)
@@ -122,20 +109,8 @@ func paintSpritesheet(sprites []image.Image, hframes int, vframes int, count_ver
 	}
 }
 
-func chunkDecodedSprites(slice []image.Image, chunkSize int) [][]image.Image {
-	var chunks [][]image.Image
-	for i := 0; i < len(slice); i += chunkSize {
-		end := i + chunkSize
-		if end > len(slice) {
-			end = len(slice)
-		}
-		chunks = append(chunks, slice[i:end])
-	}
-	return chunks
-}
-
-func chunkSpriteDirEntries(slice []fs.DirEntry, chunkSize int) [][]fs.DirEntry {
-	var chunks [][]fs.DirEntry
+func sliceChunker[T any](slice []T, chunkSize int) [][]T {
+	var chunks [][]T
 	for i := 0; i < len(slice); i += chunkSize {
 		end := i + chunkSize
 		if end > len(slice) {
