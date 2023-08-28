@@ -17,7 +17,8 @@ import (
 
 func main() {
 	start := time.Now()
-	targetFolder := flag.String("f", "sprites", "folder containing sprites")
+	targetFolder := flag.String("f", "sprites", "Folder name that contains sprites")
+	hframes := flag.Int("hframes", 8, "Amount of horizontal sprites you want in your spritesheet")
 	flag.Parse()
 
 	pwd, err := os.Getwd()
@@ -54,21 +55,21 @@ func main() {
 		all_decoded_images = append(all_decoded_images, image...)
 	}
 
-	hframes := 8
-	vframes := (len(sprites_folder) / hframes) + 1
+	// hframes := 8
+	vframes := (len(sprites_folder) / *hframes) + 1
 	fmt.Println(vframes)
-	spritesheet_height := 128 * hframes
+	spritesheet_height := 128 * *hframes
 	spritesheet_width := 128 * vframes
 	spritesheet := image.NewRGBA(image.Rect(0, 0, spritesheet_height, int(spritesheet_width)))
 	draw.Draw(spritesheet, spritesheet.Bounds(), spritesheet, image.Point{}, draw.Src)
-	decoded_images_to_draw_chunked := sliceChunker(all_decoded_images, hframes)
+	decoded_images_to_draw_chunked := sliceChunker(all_decoded_images, *hframes)
 
 	var make_spritesheet_wg sync.WaitGroup
 	for count_vertical_frames, sprite_chunk := range decoded_images_to_draw_chunked {
 		make_spritesheet_wg.Add(1)
 		go func(count_vertical_frames int, sprite_chunk []image.Image) {
 			defer make_spritesheet_wg.Done()
-			paintSpritesheet(sprite_chunk, hframes, int(vframes), count_vertical_frames, spritesheet)
+			paintSpritesheet(sprite_chunk, *hframes, int(vframes), count_vertical_frames, spritesheet)
 		}(count_vertical_frames, sprite_chunk)
 	}
 	make_spritesheet_wg.Wait()
