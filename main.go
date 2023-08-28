@@ -17,8 +17,9 @@ import (
 
 func main() {
 	start := time.Now()
-	targetFolder := flag.String("f", "sprites", "Folder name that contains sprites")
-	hframes := flag.Int("hframes", 8, "Amount of horizontal sprites you want in your spritesheet")
+	sprite_source_folder := flag.String("f", "sprites", "Folder name that contains sprites.")
+	desired_spritesheet_name := flag.String("n", "my_spritesheet.png", "Your desired spritesheet name.")
+	hframes := flag.Int("hframes", 8, "Amount of horizontal sprites you want in your spritesheet: default 8.")
 	flag.Parse()
 
 	pwd, err := os.Getwd()
@@ -27,7 +28,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	sprites_folder, err := os.ReadDir(filepath.Join(pwd, *targetFolder))
+	sprites_folder, err := os.ReadDir(filepath.Join(pwd, *sprite_source_folder))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -45,7 +46,7 @@ func main() {
 	for _, chunked_sprite_name := range chunked_sprite_names {
 		chunk_images_waitgroup.Add(1)
 		go func(chunked_sprite_name []fs.DirEntry) {
-			one_chunk_of_decoded_images := decodeImages(chunked_sprite_name, *targetFolder, pwd, &chunk_images_waitgroup)
+			one_chunk_of_decoded_images := decodeImages(chunked_sprite_name, *sprite_source_folder, pwd, &chunk_images_waitgroup)
 			decoded_images_chunked = append(decoded_images_chunked, one_chunk_of_decoded_images)
 		}(chunked_sprite_name)
 	}
@@ -55,9 +56,7 @@ func main() {
 		all_decoded_images = append(all_decoded_images, image...)
 	}
 
-	// hframes := 8
 	vframes := (len(sprites_folder) / *hframes) + 1
-	fmt.Println(vframes)
 	spritesheet_height := 128 * *hframes
 	spritesheet_width := 128 * vframes
 	spritesheet := image.NewRGBA(image.Rect(0, 0, spritesheet_height, int(spritesheet_width)))
@@ -73,7 +72,7 @@ func main() {
 		}(count_vertical_frames, sprite_chunk)
 	}
 	make_spritesheet_wg.Wait()
-	f, err := os.Create("spritesheet.png")
+	f, err := os.Create(*desired_spritesheet_name)
 	if err != nil {
 		panic(err)
 	}
