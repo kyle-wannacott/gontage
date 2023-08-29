@@ -34,31 +34,35 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var decoded_images_chunked [][]image.Image
-	var all_decoded_images []image.Image
-	var chunked_sprite_names [][]fs.DirEntry
+	var chunkSize int
 	if runtime.NumCPU() > 12 && runtime.NumCPU()%4 == 0 {
-		chunked_sprite_names = sliceChunker(sprites_folder, runtime.NumCPU()/4)
+		chunkSize = runtime.NumCPU() / 4
 	} else {
-		chunked_sprite_names = sliceChunker(sprites_folder, 6)
+		chunkSize = 6
 	}
 	// fmt.Print(chunked_sprite_names[0:1])
 
 	var chunk_images_waitgroup sync.WaitGroup
-	for _, chunked_sprite_name := range chunked_sprite_names {
+	all_decoded_images := make([]image.Image, len(sprites_folder))
+	for i := 0; i < len(sprites_folder); i += chunkSize {
+		start := i
+		end := start + chunkSize
+		if end > len(sprites_folder) {
+			end = len(sprites_folder)
+		}
+
 		chunk_images_waitgroup.Add(1)
-		fmt.Println(chunked_sprite_name)
-		go func(chunked_sprite_name []fs.DirEntry) {
-			fmt.Println(chunked_sprite_name)
-			one_chunk_of_decoded_images := decodeImages(chunked_sprite_name, *sprite_source_folder, pwd, &chunk_images_waitgroup)
-			decoded_images_chunked = append(decoded_images_chunked, one_chunk_of_decoded_images)
-		}(chunked_sprite_name)
+		go func(start int, end int) {
+			// Ideally decodeImages would write into all_decoded_images directly.
+			one_chunk_of_decoded_images := decodeImages(sprites_folder[start:end], *sprite_source_folder, pwd, &chunk_images_waitgroup)
+			for j, decoded_image := range one_chunk_of_decoded_images {
+				all_decoded_images[start+j] = decoded_image
+			}
+		}(start, end)
 	}
+
 	chunk_images_waitgroup.Wait()
 
-	for _, image := range decoded_images_chunked {
-		all_decoded_images = append(all_decoded_images, image...)
-	}
 	// fmt.Println("check order ", all_decoded_images)
 	// for i, test_image := range all_decoded_images {
 	// fmt.Println(i, test_image)
@@ -95,11 +99,8 @@ func main() {
 func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string, wg *sync.WaitGroup) []image.Image {
 	defer wg.Done()
 	var sprites_array []image.Image
-	for i, sprite := range sprites_folder {
+	for _, sprite := range sprites_folder {
 		if reader, err := os.Open(filepath.Join(pwd, targetFolder, sprite.Name())); err == nil {
-			if i == 0 {
-				// fmt.Println(reader.Name())
-			}
 			m, _, err := image.Decode(reader)
 			if err != nil {
 				log.Fatal(err)
