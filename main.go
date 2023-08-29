@@ -32,6 +32,8 @@ func main() {
 	sprites_folder, err := os.ReadDir(filepath.Join(pwd, *sprite_source_folder))
 	if err != nil {
 		log.Fatal(err)
+	} else if len(sprites_folder) == 0 {
+		log.Fatalf("Looks like folder %v is empty...", *sprite_source_folder)
 	}
 
 	var chunkSize int
