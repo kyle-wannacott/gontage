@@ -19,7 +19,6 @@ import (
 func main() {
 	start := time.Now()
 	sprite_source_folder := flag.String("f", "sprites", "Folder name that contains sprites.")
-	desired_spritesheet_name := flag.String("n", "my_spritesheet.png", "Your desired spritesheet name.")
 	hframes := flag.Int("hframes", 8, "Amount of horizontal sprites you want in your spritesheet: default 8.")
 	flag.Parse()
 
@@ -78,7 +77,8 @@ func main() {
 		}(count_vertical_frames, sprite_chunk)
 	}
 	make_spritesheet_wg.Wait()
-	f, err := os.Create(*desired_spritesheet_name)
+	spritesheet_name := fmt.Sprintf("%v_f%v_v%v.png", *sprite_source_folder, len(all_decoded_images), vframes)
+	f, err := os.Create(spritesheet_name)
 	if err != nil {
 		panic(err)
 	}
