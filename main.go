@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"io/fs"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -41,11 +42,14 @@ func main() {
 	} else {
 		chunked_sprite_names = sliceChunker(sprites_folder, 6)
 	}
+	// fmt.Print(chunked_sprite_names[0:1])
 
 	var chunk_images_waitgroup sync.WaitGroup
 	for _, chunked_sprite_name := range chunked_sprite_names {
 		chunk_images_waitgroup.Add(1)
+		fmt.Println(chunked_sprite_name)
 		go func(chunked_sprite_name []fs.DirEntry) {
+			fmt.Println(chunked_sprite_name)
 			one_chunk_of_decoded_images := decodeImages(chunked_sprite_name, *sprite_source_folder, pwd, &chunk_images_waitgroup)
 			decoded_images_chunked = append(decoded_images_chunked, one_chunk_of_decoded_images)
 		}(chunked_sprite_name)
@@ -55,8 +59,12 @@ func main() {
 	for _, image := range decoded_images_chunked {
 		all_decoded_images = append(all_decoded_images, image...)
 	}
+	// fmt.Println("check order ", all_decoded_images)
+	// for i, test_image := range all_decoded_images {
+	// fmt.Println(i, test_image)
+	// }
 
-	vframes := (len(sprites_folder) / *hframes) + 1
+	vframes := math.Ceil(float64(len(sprites_folder) / *hframes) + 1)
 	spritesheet_height := 128 * *hframes
 	spritesheet_width := 128 * vframes
 	spritesheet := image.NewRGBA(image.Rect(0, 0, spritesheet_height, int(spritesheet_width)))
@@ -76,19 +84,22 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer f.Close()
 	encoder := png.Encoder{CompressionLevel: png.BestSpeed}
 	if err = encoder.Encode(f, spritesheet); err != nil {
 		log.Printf("failed to encode: %v", err)
 	}
+	f.Close()
 	fmt.Println(time.Since(start))
 }
 
 func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string, wg *sync.WaitGroup) []image.Image {
 	defer wg.Done()
 	var sprites_array []image.Image
-	for _, sprite := range sprites_folder {
+	for i, sprite := range sprites_folder {
 		if reader, err := os.Open(filepath.Join(pwd, targetFolder, sprite.Name())); err == nil {
+			if i == 0 {
+				// fmt.Println(reader.Name())
+			}
 			m, _, err := image.Decode(reader)
 			if err != nil {
 				log.Fatal(err)
@@ -105,6 +116,7 @@ func paintSpritesheet(sprites []image.Image, hframes int, vframes int, count_ver
 		bounds := sprite_image.Bounds()
 		width := bounds.Dx()
 		height := bounds.Dy()
+		// fmt.Println(sprite_image)
 		draw.Draw(spritesheet, image.Rect(count_horizontal_frames*height, count_vertical_frames*width, width*hframes, height*vframes), sprite_image, image.Point{}, draw.Over)
 	}
 }
