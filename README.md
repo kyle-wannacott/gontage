@@ -29,9 +29,11 @@ Reference images [33](https://github.com/LeeWannacott/gontage/blob/main/test_spr
 </p>
 
 [Gontage:](https://github.com/LeeWannacott/gontage/blob/main/test_sprites_f187_v24_gontage.png)
-![image](https://github.com/LeeWannacott/gontage/assets/49783296/ab088f53-856f-4292-b80d-61f62ac9b1f1)
+![image](https://github.com/LeeWannacott/gontage/assets/49783296/99cc91a5-295a-46d1-ab16-32451ad22db8)
+
 
 [Montage:](https://github.com/LeeWannacott/gontage/blob/main/test_sprites_f187_v24_montage.png)
-![image](https://github.com/LeeWannacott/gontage/assets/49783296/a2df77a0-8bfe-4c47-9cc3-64388723b1f5)
+![image](https://github.com/LeeWannacott/gontage/assets/49783296/c10c6b46-e0d3-4d74-977d-9001b1837aa4)
+
 
 
