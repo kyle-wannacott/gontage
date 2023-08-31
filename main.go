@@ -64,7 +64,7 @@ func main() {
 
 	spritesheet_width, spritesheet_height, vframes := calcSpritesheetDimensions(*hframes, all_decoded_images)
 
-	spritesheet := image.NewRGBA(image.Rect(0, 0, spritesheet_width, spritesheet_height))
+	spritesheet := image.NewNRGBA(image.Rect(0, 0, spritesheet_width, spritesheet_height))
 	draw.Draw(spritesheet, spritesheet.Bounds(), spritesheet, image.Point{}, draw.Src)
 	decoded_images_to_draw_chunked := sliceChunk(all_decoded_images, *hframes)
 
