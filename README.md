@@ -1,6 +1,6 @@
 # gontage
 
-Create spritesheets from a folder of sprites faster than ImageMagicks montage command.
+Create spritesheets from a folder of sprites faster than ImageMagicks montage command v6.
 
 ## benchmarks
 gontage is ~3.5x faster in this instance tested on a 12 core [AMD 5900x](https://www.amd.com/en/product/10461)
