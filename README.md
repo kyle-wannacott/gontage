@@ -29,5 +29,7 @@ Reference images [33](https://github.com/LeeWannacott/gontage/blob/main/test_spr
 ![image](https://github.com/LeeWannacott/gontage/assets/49783296/f6c911b9-2bc0-455c-bed9-5a70c07696ad)
 
 
+** Other Info:
+### Using an appImage for ImageMagick adds around 0.8seconds to startup time.
 
 
