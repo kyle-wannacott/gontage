@@ -15,6 +15,14 @@ import (
 	"time"
 )
 
+type drawingInfo struct {
+	sprites               []image.Image
+	hframes               int
+	vframes               int
+	vertical_frames_count int
+	spritesheet           draw.Image
+}
+
 func Gontage(sprite_source_folder string, hframes *int) {
 	start := time.Now()
 	pwd, err := os.Getwd()
@@ -57,19 +65,26 @@ func Gontage(sprite_source_folder string, hframes *int) {
 	}
 	chunk_images_waitgroup.Wait()
 
-	spritesheet_width, spritesheet_height, vframes := calcSpritesheetDimensions(*hframes, all_decoded_images)
+	spritesheet_width, spritesheet_height, vframes := calcSheetDimensions(*hframes, all_decoded_images)
 
 	spritesheet := image.NewNRGBA(image.Rect(0, 0, spritesheet_width, spritesheet_height))
 	draw.Draw(spritesheet, spritesheet.Bounds(), spritesheet, image.Point{}, draw.Src)
 	decoded_images_to_draw_chunked := sliceChunk(all_decoded_images, *hframes)
 
 	var make_spritesheet_wg sync.WaitGroup
-	for vertical_frames_count, sprite_chunk := range decoded_images_to_draw_chunked {
+	for count_vertical_frames, sprite_chunk := range decoded_images_to_draw_chunked {
+		drawing := drawingInfo{
+			sprites:     sprite_chunk,
+			hframes:     *hframes,
+			vframes:     int(vframes),
+			spritesheet: spritesheet,
+		}
 		make_spritesheet_wg.Add(1)
 		go func(vertical_frames_count int, sprite_chunk []image.Image) {
+			drawing.vertical_frames_count = vertical_frames_count
 			defer make_spritesheet_wg.Done()
-			drawSpritesheet(sprite_chunk, *hframes, int(vframes), vertical_frames_count, spritesheet)
-		}(vertical_frames_count, sprite_chunk)
+			drawSpritesheet(drawing)
+		}(count_vertical_frames, sprite_chunk)
 	}
 	make_spritesheet_wg.Wait()
 	spritesheet_name := fmt.Sprintf("%v_f%v_v%v.png", sprite_source_folder, len(all_decoded_images), vframes)
@@ -101,15 +116,14 @@ func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string,
 	return sprites_array
 }
 
-func drawSpritesheet(sprites []image.Image, hframes int, vframes int, vertical_frames_count int, spritesheet draw.Image) {
-	for horizontal_frames_count, sprite_image := range sprites {
+func drawSpritesheet(drawing drawingInfo) {
+	for horizontal_frames_count, sprite_image := range drawing.sprites {
 		bounds := sprite_image.Bounds()
-		width := bounds.Dx()
-		height := bounds.Dy()
-		r := image.Rect(
-			horizontal_frames_count*height, vertical_frames_count*width, width*hframes, height*vframes,
-		)
-		draw.Draw(spritesheet, r, sprite_image, image.Point{}, draw.Over)
+		width, height := bounds.Dx(), bounds.Dy()
+		x0, y0 := horizontal_frames_count*height, drawing.vertical_frames_count*width
+		x1, y1 := width*drawing.hframes, height*drawing.vframes
+		r := image.Rect(x0, y0, x1, y1)
+		draw.Draw(drawing.spritesheet, r, sprite_image, image.Point{}, draw.Over)
 	}
 }
 
@@ -125,7 +139,7 @@ func sliceChunk[T any](slice []T, chunkSize int) [][]T {
 	return chunks
 }
 
-func calcSpritesheetDimensions(hframes int, all_decoded_images []image.Image) (int, int, float64) {
+func calcSheetDimensions(hframes int, all_decoded_images []image.Image) (int, int, float64) {
 	vframes := math.Ceil(float64(len(all_decoded_images)/hframes) + 1)
 	var spritesheet_width int
 	var spritesheet_height int
