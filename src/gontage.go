@@ -64,12 +64,12 @@ func Gontage(sprite_source_folder string, hframes *int) {
 	decoded_images_to_draw_chunked := sliceChunk(all_decoded_images, *hframes)
 
 	var make_spritesheet_wg sync.WaitGroup
-	for count_vertical_frames, sprite_chunk := range decoded_images_to_draw_chunked {
+	for vertical_frames_count, sprite_chunk := range decoded_images_to_draw_chunked {
 		make_spritesheet_wg.Add(1)
-		go func(count_vertical_frames int, sprite_chunk []image.Image) {
+		go func(vertical_frames_count int, sprite_chunk []image.Image) {
 			defer make_spritesheet_wg.Done()
-			drawSpritesheet(sprite_chunk, *hframes, int(vframes), count_vertical_frames, spritesheet)
-		}(count_vertical_frames, sprite_chunk)
+			drawSpritesheet(sprite_chunk, *hframes, int(vframes), vertical_frames_count, spritesheet)
+		}(vertical_frames_count, sprite_chunk)
 	}
 	make_spritesheet_wg.Wait()
 	spritesheet_name := fmt.Sprintf("%v_f%v_v%v.png", sprite_source_folder, len(all_decoded_images), vframes)
@@ -101,12 +101,15 @@ func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string,
 	return sprites_array
 }
 
-func drawSpritesheet(sprites []image.Image, hframes int, vframes int, count_vertical_frames int, spritesheet draw.Image) {
-	for count_horizontal_frames, sprite_image := range sprites {
+func drawSpritesheet(sprites []image.Image, hframes int, vframes int, vertical_frames_count int, spritesheet draw.Image) {
+	for horizontal_frames_count, sprite_image := range sprites {
 		bounds := sprite_image.Bounds()
 		width := bounds.Dx()
 		height := bounds.Dy()
-		draw.Draw(spritesheet, image.Rect(count_horizontal_frames*height, count_vertical_frames*width, width*hframes, height*vframes), sprite_image, image.Point{}, draw.Over)
+		r := image.Rect(
+			horizontal_frames_count*height, vertical_frames_count*width, width*hframes, height*vframes,
+		)
+		draw.Draw(spritesheet, r, sprite_image, image.Point{}, draw.Over)
 	}
 }
 
