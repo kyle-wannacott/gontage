@@ -67,7 +67,11 @@ func main() {
 				}
 				sub_folder_path_gontage := filepath.Join(*parent_folder_path, sub_folder.Name())
 				sub_folder_path := filepath.Join(pwd, *parent_folder_path, sub_folder.Name())
-
+				folder := folderInfo{
+					sub_folder_path:         sub_folder_path,
+					sub_folder_path_gontage: sub_folder_path_gontage,
+					sprite_source_folder:    *sprite_source_folder,
+				}
 				amount_of_sprites, folder_names, sprite_height, sprite_width := iterate_folder(sub_folder_path, i)
 				spritesheet := spritesheet{
 					sprite_height:     sprite_height,
@@ -84,12 +88,7 @@ func main() {
 						wg.Add(1)
 						go func(i int, folder_name string) {
 							defer wg.Done()
-							folder := folderInfo{
-								folder_name:             folder_name,
-								sub_folder_path:         sub_folder_path,
-								sub_folder_path_gontage: sub_folder_path_gontage,
-								sprite_source_folder:    *sprite_source_folder,
-							}
+							folder.folder_name = folder_name
 							call_gontage_or_montage(i, spritesheet, folder, cli)
 						}(i, folder_name)
 					}
