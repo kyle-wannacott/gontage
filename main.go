@@ -4,138 +4,133 @@ import (
 	"flag"
 	"fmt"
 	"image"
-	"image/draw"
-	"image/png"
-	"io/fs"
+	_ "image/png"
 	"log"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"time"
+
+	gontage "github.com/LeeWannacott/gontage/src"
 )
 
 func main() {
 	start := time.Now()
-	sprite_source_folder := flag.String("f", "sprites", "Folder name that contains sprites.")
-	hframes := flag.Int("hframes", 8, "Amount of horizontal sprites you want in your spritesheet: default 8.")
-	flag.Parse()
-
 	pwd, err := os.Getwd()
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+	sprite_source_folder := flag.String("f", "", "Folder name that contains sprites.")
+	hframes := flag.Int("hframes", 8, "Amount of horizontal sprites you want in your spritesheet: default 8.")
+	parent_folder_path := flag.String("mf", "", "multiple folders: path should be parent folder containing sub folders that contain folders with sprites/images in them. Refer to test_multi for example structure.")
+	useMontage := flag.Bool("montage", false, "Use montage with -mf instead of gontage (if installed)")
+	help := flag.Bool("h", false, "Display help")
+	flag.Parse()
 
-	sprites_folder, err := os.ReadDir(filepath.Join(pwd, *sprite_source_folder))
-	if err != nil {
-		log.Fatal(err)
-	} else if len(sprites_folder) == 0 {
-		log.Fatalf("Looks like folder %v is empty...", *sprite_source_folder)
+	if *help {
+		fmt.Fprintf(os.Stderr, "Usage: %s [OPTIONS]\n", os.Args[0])
+		flag.PrintDefaults()
+		os.Exit(0)
 	}
 
-	var chunkSize int
-	if runtime.NumCPU() > 12 && runtime.NumCPU()%4 == 0 {
-		chunkSize = runtime.NumCPU() / 4
+	if *sprite_source_folder != "" {
+		gontage.Gontage(*sprite_source_folder, hframes)
 	} else {
-		chunkSize = 6
-	}
-
-	var chunk_images_waitgroup sync.WaitGroup
-	all_decoded_images := make([]image.Image, len(sprites_folder))
-	for i := 0; i < len(sprites_folder); i += chunkSize {
-		start := i
-		end := start + chunkSize
-		if end > len(sprites_folder) {
-			end = len(sprites_folder)
-		}
-
-		chunk_images_waitgroup.Add(1)
-		go func(start int, end int) {
-			// Ideally decodeImages would write into all_decoded_images directly.
-			one_chunk_of_decoded_images := decodeImages(sprites_folder[start:end], *sprite_source_folder, pwd, &chunk_images_waitgroup)
-			for j, decoded_image := range one_chunk_of_decoded_images {
-				all_decoded_images[start+j] = decoded_image
-			}
-		}(start, end)
-	}
-	chunk_images_waitgroup.Wait()
-
-	spritesheet_width, spritesheet_height, vframes := calcSpritesheetDimensions(*hframes, all_decoded_images)
-
-	spritesheet := image.NewNRGBA(image.Rect(0, 0, spritesheet_width, spritesheet_height))
-	draw.Draw(spritesheet, spritesheet.Bounds(), spritesheet, image.Point{}, draw.Src)
-	decoded_images_to_draw_chunked := sliceChunk(all_decoded_images, *hframes)
-
-	var make_spritesheet_wg sync.WaitGroup
-	for count_vertical_frames, sprite_chunk := range decoded_images_to_draw_chunked {
-		make_spritesheet_wg.Add(1)
-		go func(count_vertical_frames int, sprite_chunk []image.Image) {
-			defer make_spritesheet_wg.Done()
-			drawSpritesheet(sprite_chunk, *hframes, int(vframes), count_vertical_frames, spritesheet)
-		}(count_vertical_frames, sprite_chunk)
-	}
-	make_spritesheet_wg.Wait()
-	spritesheet_name := fmt.Sprintf("%v_f%v_v%v.png", *sprite_source_folder, len(all_decoded_images), vframes)
-	f, err := os.Create(spritesheet_name)
-	if err != nil {
-		panic(err)
-	}
-	encoder := png.Encoder{CompressionLevel: png.BestSpeed}
-	if err = encoder.Encode(f, spritesheet); err != nil {
-		log.Printf("failed to encode: %v", err)
-	}
-	f.Close()
-	fmt.Println(time.Since(start))
-}
-
-func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string, wg *sync.WaitGroup) []image.Image {
-	defer wg.Done()
-	var sprites_array []image.Image
-	for _, sprite := range sprites_folder {
-		if reader, err := os.Open(filepath.Join(pwd, targetFolder, sprite.Name())); err == nil {
-			m, _, err := image.Decode(reader)
+		var wg sync.WaitGroup
+		if parent_folder_path != nil {
+			parent_folder, err := os.ReadDir(filepath.Join(pwd, *parent_folder_path))
 			if err != nil {
 				log.Fatal(err)
 			}
-			sprites_array = append(sprites_array, m)
-			reader.Close()
+			for i, sub_folder := range parent_folder {
+				if err != nil {
+					fmt.Println(err)
+				}
+				sub_folder_path_gontage := filepath.Join(*parent_folder_path, sub_folder.Name())
+				sub_folder_path := filepath.Join(pwd, *parent_folder_path, sub_folder.Name())
+
+				amount_of_sprites, folder_names, sprite_height, sprite_width := iterate_folder(sub_folder_path, i)
+				if len(amount_of_sprites) == len(folder_names) {
+					for i, folder_name := range folder_names {
+						wg.Add(1)
+						go func(i int, folder_name string) {
+							defer wg.Done()
+							call_gontage_or_montage(i, folder_name, sub_folder_path, sprite_height, sprite_width, amount_of_sprites, *useMontage, sub_folder_path_gontage, *sprite_source_folder, *hframes)
+						}(i, folder_name)
+					}
+					wg.Wait()
+				}
+			}
 		}
-	}
-	return sprites_array
-}
-
-func drawSpritesheet(sprites []image.Image, hframes int, vframes int, count_vertical_frames int, spritesheet draw.Image) {
-	for count_horizontal_frames, sprite_image := range sprites {
-		bounds := sprite_image.Bounds()
-		width := bounds.Dx()
-		height := bounds.Dy()
-		draw.Draw(spritesheet, image.Rect(count_horizontal_frames*height, count_vertical_frames*width, width*hframes, height*vframes), sprite_image, image.Point{}, draw.Over)
+		fmt.Println("Total time: ", time.Since(start))
 	}
 }
 
-func sliceChunk[T any](slice []T, chunkSize int) [][]T {
-	var chunks [][]T
-	for i := 0; i < len(slice); i += chunkSize {
-		end := i + chunkSize
-		if end > len(slice) {
-			end = len(slice)
+func call_gontage_or_montage(i int, folder_name string, sub_folder_path string, sprite_height int, sprite_width int, amount_of_sprites []int, useMontage bool, sub_folder_path_gontage string, sprite_source_folder string, hframes int) {
+	spritesheet_width := 8
+	background_type := "transparent"
+	geometry_size := fmt.Sprintf("%vx%v", sprite_height, sprite_width)
+	spritesheet_height := math.Ceil(float64(amount_of_sprites[i]/spritesheet_width) + 1)
+	input_folder_path := filepath.Join((sub_folder_path), folder_name, "/*")
+	// input_folder_path_g := filepath.Join(parent_folder_path, folder_name)
+	tile_size := fmt.Sprintf("%vx%v", spritesheet_width, spritesheet_height)
+	sprite_name := fmt.Sprintf("%s_f%d_v%v.png", folder_name, amount_of_sprites[i], spritesheet_height)
+
+	if useMontage {
+		out, err := exec.Command("montage", input_folder_path, "-geometry", geometry_size, "-tile", tile_size,
+			"-background", background_type, sprite_name).CombinedOutput()
+		if err != nil {
+			fmt.Println("could not run command: ", err)
 		}
-		chunks = append(chunks, slice[i:end])
+		fmt.Println(string(out), filepath.Join(sub_folder_path_gontage, folder_name)+"/*", sprite_name)
+	} else {
+		// fmt.Println(sub_folder_path_gontage + "/" + folder_name)
+		gontage.Gontage(filepath.Join(sub_folder_path_gontage, folder_name), &hframes)
 	}
-	return chunks
 }
 
-func calcSpritesheetDimensions(hframes int, all_decoded_images []image.Image) (int, int, float64) {
-	vframes := math.Ceil(float64(len(all_decoded_images)/hframes) + 1)
-	var spritesheet_width int
-	var spritesheet_height int
-	for _, image := range all_decoded_images[:hframes] {
-		spritesheet_width += image.Bounds().Dx()
-	}
-	for _, image := range all_decoded_images[:int(vframes)] {
-		spritesheet_height += image.Bounds().Dy()
-	}
-	return spritesheet_width, spritesheet_height, vframes
+func iterate_folder(file_path_to_walk string, index int) ([]int, []string, int, int) {
+	is_first_sprite_in_directory := true
+	folder_names := []string{}
+	amount_of_sprites := []int{}
+	sprite_height := 0
+	sprite_width := 0
+
+	is_containing_folder := true
+	filepath.Walk(file_path_to_walk, func(path string, info os.FileInfo, err error) error {
+		if !is_containing_folder {
+			if err != nil {
+				log.Fatalf(err.Error())
+			}
+			if info.IsDir() {
+				folder_path, err := os.ReadDir(path)
+				if err != nil {
+					log.Fatalf(err.Error())
+				}
+				amount_of_sprites = append(amount_of_sprites, len(folder_path))
+				folder_names = append(folder_names, info.Name())
+			}
+			if !info.IsDir() && is_first_sprite_in_directory {
+				if reader, err := os.Open(path); err == nil {
+					m, _, err := image.Decode(reader)
+					if err != nil {
+						log.Fatal(err)
+					}
+					bounds := m.Bounds()
+					w := bounds.Dx()
+					h := bounds.Dy()
+					sprite_height = h
+					sprite_width = w
+					is_first_sprite_in_directory = false
+					reader.Close()
+				}
+			}
+		}
+		is_containing_folder = false
+		return nil
+	})
+	return amount_of_sprites, folder_names, sprite_height, sprite_width
 }
