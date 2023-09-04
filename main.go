@@ -16,6 +16,22 @@ import (
 	gontage "github.com/LeeWannacott/gontage/src"
 )
 
+type spritesheet struct {
+	sprite_height     int
+	sprite_width      int
+	amount_of_sprites []int
+	hframes           int
+}
+type folderInfo struct {
+	sub_folder_path         string
+	folder_name             string
+	sub_folder_path_gontage string
+	sprite_source_folder    string
+}
+type cliOptions struct {
+	useMontage bool
+}
+
 func main() {
 	start := time.Now()
 	pwd, err := os.Getwd()
@@ -53,12 +69,28 @@ func main() {
 				sub_folder_path := filepath.Join(pwd, *parent_folder_path, sub_folder.Name())
 
 				amount_of_sprites, folder_names, sprite_height, sprite_width := iterate_folder(sub_folder_path, i)
+				spritesheet := spritesheet{
+					sprite_height:     sprite_height,
+					sprite_width:      sprite_width,
+					amount_of_sprites: amount_of_sprites,
+					hframes:           *hframes,
+				}
+				cli := cliOptions{
+					useMontage: *useMontage,
+				}
+
 				if len(amount_of_sprites) == len(folder_names) {
 					for i, folder_name := range folder_names {
 						wg.Add(1)
 						go func(i int, folder_name string) {
 							defer wg.Done()
-							call_gontage_or_montage(i, folder_name, sub_folder_path, sprite_height, sprite_width, amount_of_sprites, *useMontage, sub_folder_path_gontage, *sprite_source_folder, *hframes)
+							folder := folderInfo{
+								folder_name:             folder_name,
+								sub_folder_path:         sub_folder_path,
+								sub_folder_path_gontage: sub_folder_path_gontage,
+								sprite_source_folder:    *sprite_source_folder,
+							}
+							call_gontage_or_montage(i, spritesheet, folder, cli)
 						}(i, folder_name)
 					}
 					wg.Wait()
@@ -69,26 +101,24 @@ func main() {
 	}
 }
 
-func call_gontage_or_montage(i int, folder_name string, sub_folder_path string, sprite_height int, sprite_width int, amount_of_sprites []int, useMontage bool, sub_folder_path_gontage string, sprite_source_folder string, hframes int) {
-	spritesheet_width := 8
+func call_gontage_or_montage(i int, spritesheet spritesheet, folder folderInfo, cli cliOptions) {
+	spritesheet_width := spritesheet.hframes
+	spritesheet_height := math.Ceil(float64(spritesheet.amount_of_sprites[i]/spritesheet_width) + 1)
 	background_type := "transparent"
-	geometry_size := fmt.Sprintf("%vx%v", sprite_height, sprite_width)
-	spritesheet_height := math.Ceil(float64(amount_of_sprites[i]/spritesheet_width) + 1)
-	input_folder_path := filepath.Join((sub_folder_path), folder_name, "/*")
-	// input_folder_path_g := filepath.Join(parent_folder_path, folder_name)
+	geometry_size := fmt.Sprintf("%vx%v", spritesheet.sprite_height, spritesheet.sprite_width)
+	input_folder_path := filepath.Join((folder.sub_folder_path), folder.folder_name, "/*")
 	tile_size := fmt.Sprintf("%vx%v", spritesheet_width, spritesheet_height)
-	sprite_name := fmt.Sprintf("%s_f%d_v%v.png", folder_name, amount_of_sprites[i], spritesheet_height)
+	sprite_name := fmt.Sprintf("%s_f%d_v%v.png", folder.folder_name, spritesheet.amount_of_sprites[i], spritesheet_height)
 
-	if useMontage {
+	if cli.useMontage {
 		out, err := exec.Command("montage", input_folder_path, "-geometry", geometry_size, "-tile", tile_size,
 			"-background", background_type, sprite_name).CombinedOutput()
 		if err != nil {
 			fmt.Println("could not run command: ", err)
 		}
-		fmt.Println(string(out), filepath.Join(sub_folder_path_gontage, folder_name)+"/*", sprite_name)
+		fmt.Println(string(out), filepath.Join(folder.sub_folder_path_gontage, folder.folder_name)+"/*", sprite_name)
 	} else {
-		// fmt.Println(sub_folder_path_gontage + "/" + folder_name)
-		gontage.Gontage(filepath.Join(sub_folder_path_gontage, folder_name), &hframes)
+		gontage.Gontage(filepath.Join(folder.sub_folder_path_gontage, folder.folder_name), &spritesheet.hframes)
 	}
 }
 
