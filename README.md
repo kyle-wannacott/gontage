@@ -13,7 +13,7 @@ gontage is ~3.5x faster in this instance tested on a 12 core [AMD 5900x](https:/
 
 At around the same level of compression:
 
-![image](https://github.com/LeeWannacott/gontage/assets/49783296/82ed22ae-4154-4041-9b7d-e3ab448f09ce)
+![image](https://github.com/LeeWannacott/gontage/assets/49783296/6aed6d6f-e7ce-4ca1-8d22-172a84bc398e)
  vs.
 ![image](https://github.com/LeeWannacott/gontage/assets/49783296/e6a5932e-34dd-4995-8ee6-b1d731e0d61c)
 
@@ -22,14 +22,16 @@ At around the same level of compression:
 Reference images [33](https://github.com/LeeWannacott/gontage/blob/main/test_sprites/frame0033.png) - [40](https://github.com/LeeWannacott/gontage/blob/main/test_sprites/frame0033.png)  :
 
 [Gontage:](https://github.com/LeeWannacott/gontage/blob/main/test_sprites_f187_v24_gontage.png)
-![image](https://github.com/LeeWannacott/gontage/assets/49783296/99cc91a5-295a-46d1-ab16-32451ad22db8)
+![image](https://github.com/LeeWannacott/gontage/assets/49783296/ea271798-7a04-4111-860b-80b19a23b86f)
 
 
-[Montage:](https://github.com/LeeWannacott/gontage/blob/main/test_sprites_f187_v24_montage.png)
-![image](https://github.com/LeeWannacott/gontage/assets/49783296/f6c911b9-2bc0-455c-bed9-5a70c07696ad)
+
+[Montage 7:](https://github.com/LeeWannacott/gontage/blob/main/test_sprites_f187_v24_montage_7.png)
+![image](https://github.com/LeeWannacott/gontage/assets/49783296/05e65b17-2752-4ebd-949b-0f1636eed765)
 
 
-** Other Info:
-### Using an appImage for ImageMagick adds around 0.8seconds to startup time.
+## Other Info:
+* Using an appImage for ImageMagick adds around 0.8seconds to startup time when running montage...
+* Building an equivalent in NodeJS took around ~700ms (800ms with Bun) for one folder 7x slower than Gontage (~90ms) and 2x slower than Montage.
 
 
