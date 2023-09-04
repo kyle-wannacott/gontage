@@ -25,8 +25,8 @@ func main() {
 	}
 	sprite_source_folder := flag.String("f", "", "Folder name that contains sprites.")
 	hframes := flag.Int("hframes", 8, "Amount of horizontal sprites you want in your spritesheet: default 8.")
-	parent_folder_path := flag.String("p", "", "folder path in current directory with sub folder containing folders with sprites; example: 'animations_folder'")
-	useMontage := flag.Bool("m", false, "Call montage instead")
+	parent_folder_path := flag.String("mf", "", "multiple folders: path should be parent folder containing sub folders that contain folders with sprites/images in them. Refer to test_multi for example structure.")
+	useMontage := flag.Bool("montage", false, "Use montage with -mf instead of gontage (if installed)")
 	help := flag.Bool("h", false, "Display help")
 	flag.Parse()
 
@@ -39,7 +39,6 @@ func main() {
 	if *sprite_source_folder != "" {
 		gontage.Gontage(*sprite_source_folder, hframes)
 	} else {
-
 		var wg sync.WaitGroup
 		if parent_folder_path != nil {
 			parent_folder, err := os.ReadDir(filepath.Join(pwd, *parent_folder_path))
@@ -86,12 +85,10 @@ func call_gontage_or_montage(i int, folder_name string, sub_folder_path string, 
 		if err != nil {
 			fmt.Println("could not run command: ", err)
 		}
-		fmt.Println(input_folder_path)
-		fmt.Println("Output: ", string(out), sprite_name)
+		fmt.Println(string(out), filepath.Join(sub_folder_path_gontage, folder_name)+"/*", sprite_name)
 	} else {
-		fmt.Println(sub_folder_path_gontage + "/" + folder_name)
-		gontage.Gontage(sub_folder_path_gontage+"/"+folder_name, &hframes)
-
+		// fmt.Println(sub_folder_path_gontage + "/" + folder_name)
+		gontage.Gontage(filepath.Join(sub_folder_path_gontage, folder_name), &hframes)
 	}
 }
 
@@ -118,7 +115,6 @@ func iterate_folder(file_path_to_walk string, index int) ([]int, []string, int, 
 			}
 			if !info.IsDir() && is_first_sprite_in_directory {
 				if reader, err := os.Open(path); err == nil {
-					defer reader.Close()
 					m, _, err := image.Decode(reader)
 					if err != nil {
 						log.Fatal(err)
@@ -129,6 +125,7 @@ func iterate_folder(file_path_to_walk string, index int) ([]int, []string, int, 
 					sprite_height = h
 					sprite_width = w
 					is_first_sprite_in_directory = false
+					reader.Close()
 				}
 			}
 		}

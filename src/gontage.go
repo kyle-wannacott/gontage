@@ -82,7 +82,7 @@ func Gontage(sprite_source_folder string, hframes *int) {
 		log.Printf("failed to encode: %v", err)
 	}
 	f.Close()
-	fmt.Println("g", time.Since(start))
+	fmt.Println(spritesheet_name, ": ", time.Since(start))
 }
 
 func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string, wg *sync.WaitGroup) []image.Image {
