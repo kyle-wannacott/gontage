@@ -1,6 +1,6 @@
 # gontage
 
-Create spritesheets from a folder of sprites faster than ImageMagicks montage command v6.
+Create spritesheets from multiple folders of sprites/images up to ~48x+ faster than ImageMagicks `montage` command.
 
 ## install
 `go install github.com/LeeWannacott/gontage@latest`
@@ -8,9 +8,21 @@ Create spritesheets from a folder of sprites faster than ImageMagicks montage co
 ## useage
 `gontage -h`
 
+![image](https://github.com/LeeWannacott/gontage/assets/49783296/7b5f2721-5ca8-4508-b072-431536d247bb)
+
+## example
+![image](https://github.com/LeeWannacott/gontage/assets/49783296/c0c35076-5a54-4295-bab0-45385a0dd31d)
+
+
+
 ## benchmarks
 
-### multiple folder -mf
+### multiple folders containing sprites -mf
+
+gontage was up to ~48x faster than montage at creating multiple spritesheets (tested on a 12 core [AMD 5900x](https://www.amd.com/en/product/10461))
+
+![image](https://github.com/LeeWannacott/gontage/assets/49783296/485911aa-661c-4313-97f4-bfb85aca8100)
+
 
 ### single folder -f
 gontage is ~3.5x faster in this instance tested on a 12 core [AMD 5900x](https://www.amd.com/en/product/10461)
