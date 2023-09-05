@@ -5,30 +5,30 @@ Create spritesheets from multiple folders of sprites/images up to ~48x+ faster t
 ## install
 `go install github.com/LeeWannacott/gontage@latest`
 
-## useage
+## useage:
 `gontage -h`
 
 ![image](https://github.com/LeeWannacott/gontage/assets/49783296/7b5f2721-5ca8-4508-b072-431536d247bb)
 
-## example
+## example:
 ![image](https://github.com/LeeWannacott/gontage/assets/49783296/c0c35076-5a54-4295-bab0-45385a0dd31d)
 
 
 
-## benchmarks
+## Benchmarking:
 
-### multiple folders containing sprites -mf
+### Multiple folders containing sprites -mf:
 
-gontage was up to ~48x faster than montage at creating multiple spritesheets (tested on a 12 core [AMD 5900x](https://www.amd.com/en/product/10461))
+* gontage was up to ~48x faster than montage at creating multiple spritesheets (tested on a 12 core [AMD 5900x](https://www.amd.com/en/product/10461))
 
 ![image](https://github.com/LeeWannacott/gontage/assets/49783296/485911aa-661c-4313-97f4-bfb85aca8100)
 
 
-### single folder -f
-gontage is ~3.5x faster in this instance tested on a 12 core [AMD 5900x](https://www.amd.com/en/product/10461)
+### Single folder -f:
+* gontage was ~3.5x faster in this instance tested on a 12 core [AMD 5900x](https://www.amd.com/en/product/10461)
 ![image](https://github.com/LeeWannacott/gontage/assets/49783296/2859f3b9-7c62-4edb-8aed-d1ff2435f942)
 
-~2.5x faster on a 2 core 4 thread [i5-4210U](https://www.intel.com/content/www/us/en/products/sku/81016/intel-core-i54210u-processor-3m-cache-up-to-2-70-ghz/specifications.html) Skylake CPU.
+* ~2.5x faster on a 2 core 4 thread [i5-4210U](https://www.intel.com/content/www/us/en/products/sku/81016/intel-core-i54210u-processor-3m-cache-up-to-2-70-ghz/specifications.html) Skylake CPU.
 ![image](https://github.com/LeeWannacott/gontage/assets/49783296/f7070214-278e-4c98-a0b3-e7af0455d932)
 
 
@@ -54,6 +54,6 @@ Reference images [33](https://github.com/LeeWannacott/gontage/blob/main/test_spr
 
 ## Other Info:
 * Using an appImage for ImageMagick adds around 0.8seconds to startup time when running montage...
-* Building an equivalent in NodeJS took around ~700ms (800ms with Bun) for one folder 7x slower than Gontage (~90ms) and 2x slower than Montage.
+* Building an equivalent in NodeJS took around ~700ms (800ms with Bun) for one folder 7x slower than Gontage (~90ms) and 2x slower than Montage (~350ms).
 
 
