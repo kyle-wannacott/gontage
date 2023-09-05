@@ -1,16 +1,16 @@
-# gontage
+# Gontage
 
 Create spritesheets from multiple folders of sprites/images up to ~48x+ faster than ImageMagicks `montage` command.
 
-## install
+## Install
 `go install github.com/LeeWannacott/gontage@latest`
 
-## useage:
+## Usage:
 `gontage -h`
 
 ![image](https://github.com/LeeWannacott/gontage/assets/49783296/7b5f2721-5ca8-4508-b072-431536d247bb)
 
-## example:
+## Example:
 ![image](https://github.com/LeeWannacott/gontage/assets/49783296/c0c35076-5a54-4295-bab0-45385a0dd31d)
 
 
