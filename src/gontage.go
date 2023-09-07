@@ -35,7 +35,7 @@ func Gontage(sprite_source_folder string, hframes *int) {
 	if err != nil {
 		log.Fatal(err)
 	} else if len(sprites_folder) == 0 {
-		log.Fatalf("Looks like folder %v is empty...", sprite_source_folder)
+		fmt.Println("Looks like folder ", sprite_source_folder, "is empty...")
 	}
 
 	var chunkSize int
