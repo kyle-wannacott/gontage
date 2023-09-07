@@ -38,66 +38,68 @@ func Gontage(sprite_source_folder string, hframes *int) {
 		fmt.Println("Looks like folder ", sprite_source_folder, "is empty...")
 	}
 
-	var chunkSize int
-	if runtime.NumCPU() > 12 && runtime.NumCPU()%4 == 0 {
-		chunkSize = runtime.NumCPU() / 4
-	} else {
-		chunkSize = 6
-	}
-
-	var chunk_images_waitgroup sync.WaitGroup
-	all_decoded_images := make([]image.Image, len(sprites_folder))
-	for i := 0; i < len(sprites_folder); i += chunkSize {
-		start := i
-		end := start + chunkSize
-		if end > len(sprites_folder) {
-			end = len(sprites_folder)
+	if len(sprites_folder) != 0 {
+		var chunkSize int
+		if runtime.NumCPU() > 12 && runtime.NumCPU()%4 == 0 {
+			chunkSize = runtime.NumCPU() / 4
+		} else {
+			chunkSize = 6
 		}
 
-		chunk_images_waitgroup.Add(1)
-		go func(start int, end int) {
-			// Ideally decodeImages would write into all_decoded_images directly.
-			one_chunk_of_decoded_images := decodeImages(sprites_folder[start:end], sprite_source_folder, pwd, &chunk_images_waitgroup)
-			for j, decoded_image := range one_chunk_of_decoded_images {
-				all_decoded_images[start+j] = decoded_image
+		var chunk_images_waitgroup sync.WaitGroup
+		all_decoded_images := make([]image.Image, len(sprites_folder))
+		for i := 0; i < len(sprites_folder); i += chunkSize {
+			start := i
+			end := start + chunkSize
+			if end > len(sprites_folder) {
+				end = len(sprites_folder)
 			}
-		}(start, end)
-	}
-	chunk_images_waitgroup.Wait()
 
-	spritesheet_width, spritesheet_height, vframes := calcSheetDimensions(*hframes, all_decoded_images)
-
-	spritesheet := image.NewNRGBA(image.Rect(0, 0, spritesheet_width, spritesheet_height))
-	draw.Draw(spritesheet, spritesheet.Bounds(), spritesheet, image.Point{}, draw.Src)
-	decoded_images_to_draw_chunked := sliceChunk(all_decoded_images, *hframes)
-
-	var make_spritesheet_wg sync.WaitGroup
-	for count_vertical_frames, sprite_chunk := range decoded_images_to_draw_chunked {
-		drawing := drawingInfo{
-			sprites:     sprite_chunk,
-			hframes:     *hframes,
-			vframes:     int(vframes),
-			spritesheet: spritesheet,
+			chunk_images_waitgroup.Add(1)
+			go func(start int, end int) {
+				// Ideally decodeImages would write into all_decoded_images directly.
+				one_chunk_of_decoded_images := decodeImages(sprites_folder[start:end], sprite_source_folder, pwd, &chunk_images_waitgroup)
+				for j, decoded_image := range one_chunk_of_decoded_images {
+					all_decoded_images[start+j] = decoded_image
+				}
+			}(start, end)
 		}
-		make_spritesheet_wg.Add(1)
-		go func(vertical_frames_count int, sprite_chunk []image.Image) {
-			drawing.vertical_frames_count = vertical_frames_count
-			defer make_spritesheet_wg.Done()
-			drawSpritesheet(drawing)
-		}(count_vertical_frames, sprite_chunk)
+		chunk_images_waitgroup.Wait()
+
+		spritesheet_width, spritesheet_height, vframes := calcSheetDimensions(*hframes, all_decoded_images)
+
+		spritesheet := image.NewNRGBA(image.Rect(0, 0, spritesheet_width, spritesheet_height))
+		draw.Draw(spritesheet, spritesheet.Bounds(), spritesheet, image.Point{}, draw.Src)
+		decoded_images_to_draw_chunked := sliceChunk(all_decoded_images, *hframes)
+
+		var make_spritesheet_wg sync.WaitGroup
+		for count_vertical_frames, sprite_chunk := range decoded_images_to_draw_chunked {
+			drawing := drawingInfo{
+				sprites:     sprite_chunk,
+				hframes:     *hframes,
+				vframes:     int(vframes),
+				spritesheet: spritesheet,
+			}
+			make_spritesheet_wg.Add(1)
+			go func(vertical_frames_count int, sprite_chunk []image.Image) {
+				drawing.vertical_frames_count = vertical_frames_count
+				defer make_spritesheet_wg.Done()
+				drawSpritesheet(drawing)
+			}(count_vertical_frames, sprite_chunk)
+		}
+		make_spritesheet_wg.Wait()
+		spritesheet_name := fmt.Sprintf("%v_f%v_v%v.png", sprite_source_folder, len(all_decoded_images), vframes)
+		f, err := os.Create(spritesheet_name)
+		if err != nil {
+			panic(err)
+		}
+		encoder := png.Encoder{CompressionLevel: png.BestSpeed}
+		if err = encoder.Encode(f, spritesheet); err != nil {
+			log.Printf("failed to encode: %v", err)
+		}
+		f.Close()
+		fmt.Println(spritesheet_name, ": ", time.Since(start))
 	}
-	make_spritesheet_wg.Wait()
-	spritesheet_name := fmt.Sprintf("%v_f%v_v%v.png", sprite_source_folder, len(all_decoded_images), vframes)
-	f, err := os.Create(spritesheet_name)
-	if err != nil {
-		panic(err)
-	}
-	encoder := png.Encoder{CompressionLevel: png.BestSpeed}
-	if err = encoder.Encode(f, spritesheet); err != nil {
-		log.Printf("failed to encode: %v", err)
-	}
-	f.Close()
-	fmt.Println(spritesheet_name, ": ", time.Since(start))
 }
 
 func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string, wg *sync.WaitGroup) []image.Image {
