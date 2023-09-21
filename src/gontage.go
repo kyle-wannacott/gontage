@@ -142,7 +142,7 @@ func sliceChunk[T any](slice []T, chunkSize int) [][]T {
 }
 
 func calcSheetDimensions(hframes int, all_decoded_images []image.Image) (int, int, float64) {
-	vframes := math.Ceil(float64(len(all_decoded_images)/hframes) + 1)
+	vframes := math.Ceil((float64(len(all_decoded_images)) / float64(hframes)))
 	var spritesheet_width int
 	var spritesheet_height int
 	for _, image := range all_decoded_images[:hframes] {
