@@ -21,6 +21,7 @@ type spritesheet struct {
 	sprite_width      int
 	amount_of_sprites []int
 	hframes           int
+	sprite_resize_px  int
 }
 type folderInfo struct {
 	sub_folder_path         string
@@ -41,6 +42,7 @@ func main() {
 	}
 	sprite_source_folder := flag.String("f", "", "Folder name that contains sprites.")
 	hframes := flag.Int("hframes", 8, "Amount of horizontal sprites you want in your spritesheet: default 8.")
+	sprite_resize_px := flag.Int("sprite_resize", 0, "Resize each tile/sprite in spritesheet to the pixel value provided.")
 	parent_folder_path := flag.String("mf", "", "multiple folders: path should be parent folder containing sub folders that contain folders with sprites/images in them. Refer to test_multi for example structure.")
 	useMontage := flag.Bool("montage", false, "Use montage with -mf instead of gontage (if installed)")
 	help := flag.Bool("h", false, "Display help")
@@ -53,7 +55,7 @@ func main() {
 	}
 
 	if *sprite_source_folder != "" {
-		gontage.Gontage(*sprite_source_folder, hframes)
+		gontage.Gontage(*sprite_source_folder, hframes, *sprite_resize_px)
 	} else {
 		var wg sync.WaitGroup
 		if parent_folder_path != nil {
@@ -78,6 +80,7 @@ func main() {
 					sprite_width:      sprite_width,
 					amount_of_sprites: amount_of_sprites,
 					hframes:           *hframes,
+					sprite_resize_px:  *sprite_resize_px,
 				}
 				cli := cliOptions{
 					useMontage: *useMontage,
@@ -117,7 +120,7 @@ func call_gontage_or_montage(i int, spritesheet spritesheet, folder folderInfo, 
 		}
 		fmt.Println(string(out), filepath.Join(folder.sub_folder_path_gontage, folder.folder_name)+"/*", sprite_name)
 	} else {
-		gontage.Gontage(filepath.Join(folder.sub_folder_path_gontage, folder.folder_name), &spritesheet.hframes)
+		gontage.Gontage(filepath.Join(folder.sub_folder_path_gontage, folder.folder_name), &spritesheet.hframes, spritesheet.sprite_resize_px)
 	}
 }
 

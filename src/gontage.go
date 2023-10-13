@@ -14,6 +14,8 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/nfnt/resize"
 )
 
 type drawingInfo struct {
@@ -24,7 +26,7 @@ type drawingInfo struct {
 	spritesheet           draw.Image
 }
 
-func Gontage(sprite_source_folder string, hframes *int) {
+func Gontage(sprite_source_folder string, hframes *int, sprite_resize_px int) {
 	start := time.Now()
 	pwd, err := os.Getwd()
 	if err != nil {
@@ -94,10 +96,20 @@ func Gontage(sprite_source_folder string, hframes *int) {
 		if err != nil {
 			panic(err)
 		}
+
 		encoder := png.Encoder{CompressionLevel: png.BestSpeed}
-		if err = encoder.Encode(f, spritesheet); err != nil {
-			log.Printf("failed to encode: %v", err)
+		if sprite_resize_px != 0 {
+			resized_spritesheet := resize.Resize(uint(*hframes*sprite_resize_px), uint(int(vframes)*sprite_resize_px),
+				spritesheet, resize.Lanczos3)
+			if err = encoder.Encode(f, resized_spritesheet); err != nil {
+				log.Printf("failed to encode: %v", err)
+			}
+		} else {
+			if err = encoder.Encode(f, spritesheet); err != nil {
+				log.Printf("failed to encode: %v", err)
+			}
 		}
+
 		f.Close()
 		fmt.Println(spritesheet_name, ": ", time.Since(start))
 	}
