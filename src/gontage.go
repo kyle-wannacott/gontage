@@ -158,7 +158,13 @@ func calcSheetDimensions(hframes int, all_decoded_images []image.Image) (int, in
 	vframes := math.Ceil((float64(len(all_decoded_images)) / float64(hframes)))
 	var spritesheet_width int
 	var spritesheet_height int
-	for _, image := range all_decoded_images[:hframes] {
+	var horizontal_sprite_count int
+	if len(all_decoded_images) < hframes {
+		horizontal_sprite_count = len(all_decoded_images)
+	} else {
+		horizontal_sprite_count = hframes
+	}
+	for _, image := range all_decoded_images[:horizontal_sprite_count] {
 		spritesheet_width += image.Bounds().Dx()
 	}
 	for _, image := range all_decoded_images[:int(vframes)] {
