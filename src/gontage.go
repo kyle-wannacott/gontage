@@ -41,6 +41,10 @@ func Gontage(sprite_source_folder string, hframes *int, sprite_resize_px int) {
 		fmt.Println("Looks like folder ", sprite_source_folder, "is empty...")
 	}
 
+	if len(sprites_folder) < *hframes {
+		*hframes = len(sprites_folder)
+	}
+
 	if len(sprites_folder) != 0 {
 		var chunkSize int
 		if runtime.NumCPU() > 12 && runtime.NumCPU()%4 == 0 {
@@ -158,13 +162,7 @@ func calcSheetDimensions(hframes int, all_decoded_images []image.Image) (int, in
 	vframes := math.Ceil((float64(len(all_decoded_images)) / float64(hframes)))
 	var spritesheet_width int
 	var spritesheet_height int
-	var horizontal_sprite_count int
-	if len(all_decoded_images) < hframes {
-		horizontal_sprite_count = len(all_decoded_images)
-	} else {
-		horizontal_sprite_count = hframes
-	}
-	for _, image := range all_decoded_images[:horizontal_sprite_count] {
+	for _, image := range all_decoded_images[:hframes] {
 		spritesheet_width += image.Bounds().Dx()
 	}
 	for _, image := range all_decoded_images[:int(vframes)] {
