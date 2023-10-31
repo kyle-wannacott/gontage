@@ -43,7 +43,7 @@ func main() {
 	sprite_source_folder := flag.String("f", "", "Folder name that contains sprites.")
 	hframes := flag.Int("hframes", 8, "Amount of horizontal sprites you want in your spritesheet: default 8.")
 	sprite_resize_px := flag.Int("sprite_resize", 0, "Resize each tile/sprite in spritesheet to the pixel value provided.")
-	single_sprites := flag.Bool("single_sprites", false, "Resize each tile/sprite in spritesheet to the pixel value provided.")
+	single_sprites := flag.Bool("single_sprites", false, "Instead of spritesheet outputs single sprites into a folder used with -sprite_resize flag")
 	parent_folder_path := flag.String("mf", "", "multiple folders: path should be parent folder containing sub folders that contain folders with sprites/images in them. Refer to test_multi for example structure.")
 	useMontage := flag.Bool("montage", false, "Use montage with -mf instead of gontage (if installed)")
 	help := flag.Bool("h", false, "Display help")
