@@ -26,7 +26,7 @@ type drawingInfo struct {
 	spritesheet           draw.Image
 }
 
-func Gontage(sprite_source_folder string, hframes *int, sprite_resize_px int) {
+func Gontage(sprite_source_folder string, hframes *int, sprite_resize_px int, single_sprites bool) {
 	start := time.Now()
 	pwd, err := os.Getwd()
 	if err != nil {
@@ -73,49 +73,67 @@ func Gontage(sprite_source_folder string, hframes *int, sprite_resize_px int) {
 		}
 		chunk_images_waitgroup.Wait()
 
-		spritesheet_width, spritesheet_height, vframes := calcSheetDimensions(*hframes, all_decoded_images)
-
-		spritesheet := image.NewNRGBA(image.Rect(0, 0, spritesheet_width, spritesheet_height))
-		draw.Draw(spritesheet, spritesheet.Bounds(), spritesheet, image.Point{}, draw.Src)
-		decoded_images_to_draw_chunked := sliceChunk(all_decoded_images, *hframes)
-
-		var make_spritesheet_wg sync.WaitGroup
-		for count_vertical_frames, sprite_chunk := range decoded_images_to_draw_chunked {
-			drawing := drawingInfo{
-				sprites:     sprite_chunk,
-				hframes:     *hframes,
-				vframes:     int(vframes),
-				spritesheet: spritesheet,
+		// TODO: refactor we use similiar code in other places as well...
+		if single_sprites && sprite_resize_px != 0 {
+			sprite_source_folder_resized_name := fmt.Sprintf("%v_resized_%vpx", sprite_source_folder, sprite_resize_px)
+			os.Mkdir(sprite_source_folder_resized_name, 0755)
+			encoder := png.Encoder{CompressionLevel: png.BestSpeed}
+			for i, decoded_image := range all_decoded_images {
+				resized_sprite_name := fmt.Sprintf("/%v_%v.png", i, "resized")
+				f, err := os.Create(sprite_source_folder_resized_name + resized_sprite_name)
+				if err != nil {
+					panic(err)
+				}
+				resized_image := resize.Resize(uint(sprite_resize_px), uint(sprite_resize_px), decoded_image, resize.Lanczos3)
+				if err = encoder.Encode(f, resized_image); err != nil {
+					log.Printf("failed to encode: %v", err)
+				}
+				fmt.Println(sprite_source_folder_resized_name + resized_sprite_name)
+				f.Close()
 			}
-			make_spritesheet_wg.Add(1)
-			go func(vertical_frames_count int, sprite_chunk []image.Image) {
-				drawing.vertical_frames_count = vertical_frames_count
-				defer make_spritesheet_wg.Done()
-				drawSpritesheet(drawing)
-			}(count_vertical_frames, sprite_chunk)
-		}
-		make_spritesheet_wg.Wait()
-		spritesheet_name := fmt.Sprintf("%v_f%v_v%v.png", sprite_source_folder, len(all_decoded_images), vframes)
-		f, err := os.Create(spritesheet_name)
-		if err != nil {
-			panic(err)
-		}
-
-		encoder := png.Encoder{CompressionLevel: png.BestSpeed}
-		if sprite_resize_px != 0 {
-			resized_spritesheet := resize.Resize(uint(*hframes*sprite_resize_px), uint(int(vframes)*sprite_resize_px),
-				spritesheet, resize.Lanczos3)
-			if err = encoder.Encode(f, resized_spritesheet); err != nil {
-				log.Printf("failed to encode: %v", err)
-			}
+			fmt.Println(time.Since(start))
 		} else {
-			if err = encoder.Encode(f, spritesheet); err != nil {
-				log.Printf("failed to encode: %v", err)
+			spritesheet_width, spritesheet_height, vframes := calcSheetDimensions(*hframes, all_decoded_images)
+			spritesheet := image.NewNRGBA(image.Rect(0, 0, spritesheet_width, spritesheet_height))
+			draw.Draw(spritesheet, spritesheet.Bounds(), spritesheet, image.Point{}, draw.Src)
+			decoded_images_to_draw_chunked := sliceChunk(all_decoded_images, *hframes)
+			var make_spritesheet_wg sync.WaitGroup
+			for count_vertical_frames, sprite_chunk := range decoded_images_to_draw_chunked {
+				drawing := drawingInfo{
+					sprites:     sprite_chunk,
+					hframes:     *hframes,
+					vframes:     int(vframes),
+					spritesheet: spritesheet,
+				}
+				make_spritesheet_wg.Add(1)
+				go func(vertical_frames_count int, sprite_chunk []image.Image) {
+					drawing.vertical_frames_count = vertical_frames_count
+					defer make_spritesheet_wg.Done()
+					drawSpritesheet(drawing)
+				}(count_vertical_frames, sprite_chunk)
 			}
-		}
+			make_spritesheet_wg.Wait()
+			spritesheet_name := fmt.Sprintf("%v_f%v_v%v.png", sprite_source_folder, len(all_decoded_images), vframes)
+			f, err := os.Create(spritesheet_name)
+			if err != nil {
+				panic(err)
+			}
+			encoder := png.Encoder{CompressionLevel: png.BestSpeed}
+			if sprite_resize_px != 0 {
+				resized_spritesheet := resize.Resize(uint(*hframes*sprite_resize_px), uint(int(vframes)*sprite_resize_px),
+					spritesheet, resize.Lanczos3)
+				if err = encoder.Encode(f, resized_spritesheet); err != nil {
+					log.Printf("failed to encode: %v", err)
+				}
+			} else {
+				if err = encoder.Encode(f, spritesheet); err != nil {
+					log.Printf("failed to encode: %v", err)
+				}
+			}
 
-		f.Close()
-		fmt.Println(spritesheet_name, ": ", time.Since(start))
+			f.Close()
+			fmt.Println(spritesheet_name, ": ", time.Since(start))
+		}
 	}
 }
 
