@@ -55,6 +55,7 @@ func Gontage(sprite_source_folder string, hframes *int, sprite_resize_px int, si
 
 		var chunk_images_waitgroup sync.WaitGroup
 		all_decoded_images := make([]image.Image, len(sprites_folder))
+		all_decoded_images_names := make([]string, len(sprites_folder))
 		for i := 0; i < len(sprites_folder); i += chunkSize {
 			start := i
 			end := start + chunkSize
@@ -65,9 +66,10 @@ func Gontage(sprite_source_folder string, hframes *int, sprite_resize_px int, si
 			chunk_images_waitgroup.Add(1)
 			go func(start int, end int) {
 				// Ideally decodeImages would write into all_decoded_images directly.
-				one_chunk_of_decoded_images := decodeImages(sprites_folder[start:end], sprite_source_folder, pwd, &chunk_images_waitgroup)
+				one_chunk_of_decoded_images, decoded_image_names := decodeImages(sprites_folder[start:end], sprite_source_folder, pwd, &chunk_images_waitgroup)
 				for j, decoded_image := range one_chunk_of_decoded_images {
 					all_decoded_images[start+j] = decoded_image
+					all_decoded_images_names[start+j] = decoded_image_names[j]
 				}
 			}(start, end)
 		}
@@ -79,7 +81,7 @@ func Gontage(sprite_source_folder string, hframes *int, sprite_resize_px int, si
 			os.Mkdir(sprite_source_folder_resized_name, 0755)
 			encoder := png.Encoder{CompressionLevel: png.BestSpeed}
 			for i, decoded_image := range all_decoded_images {
-				resized_sprite_name := fmt.Sprintf("/%v_%v.png", i, "resized")
+				resized_sprite_name := fmt.Sprintf("/%v", all_decoded_images_names[i])
 				f, err := os.Create(sprite_source_folder_resized_name + resized_sprite_name)
 				if err != nil {
 					panic(err)
@@ -137,9 +139,10 @@ func Gontage(sprite_source_folder string, hframes *int, sprite_resize_px int, si
 	}
 }
 
-func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string, wg *sync.WaitGroup) []image.Image {
+func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string, wg *sync.WaitGroup) ([]image.Image, []string) {
 	defer wg.Done()
 	var sprites_array []image.Image
+	var sprites_names []string
 	for _, sprite := range sprites_folder {
 		if reader, err := os.Open(filepath.Join(pwd, targetFolder, sprite.Name())); err == nil {
 			m, _, err := image.Decode(reader)
@@ -147,10 +150,11 @@ func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string,
 				log.Fatal(err)
 			}
 			sprites_array = append(sprites_array, m)
+			sprites_names = append(sprites_names, sprite.Name())
 			reader.Close()
 		}
 	}
-	return sprites_array
+	return sprites_array, sprites_names
 }
 
 func drawSpritesheet(drawing drawingInfo) {
