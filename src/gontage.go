@@ -161,7 +161,7 @@ func drawSpritesheet(drawing drawingInfo) {
 	for horizontal_frames_count, sprite_image := range drawing.sprites {
 		bounds := sprite_image.Bounds()
 		width, height := bounds.Dx(), bounds.Dy()
-		x0, y0 := horizontal_frames_count*height, drawing.vertical_frames_count*width
+		x0, y0 := horizontal_frames_count*width, drawing.vertical_frames_count*height
 		x1, y1 := width*drawing.hframes, height*drawing.vframes
 		r := image.Rect(x0, y0, x1, y1)
 		draw.Draw(drawing.spritesheet, r, sprite_image, image.Point{}, draw.Over)
