@@ -26,7 +26,16 @@ type drawingInfo struct {
 	spritesheet           draw.Image
 }
 
-func Gontage(sprite_source_folder string, hframes *int, sprite_resize_px int, single_sprites bool) {
+type GontageArgs struct {
+	Sprite_source_folder    string
+	Hframes                 int
+	Sprite_resize_px_resize int
+	Single_sprites          bool
+	Cut_spritesheet         int
+}
+
+func Gontage(gargs GontageArgs) {
+	// sprite_source_folder string, hframes *int, sprite_resize_px_resize int, single_sprites bool, cut_spritesheet bool
 	start := time.Now()
 	pwd, err := os.Getwd()
 	if err != nil {
@@ -34,15 +43,15 @@ func Gontage(sprite_source_folder string, hframes *int, sprite_resize_px int, si
 		os.Exit(1)
 	}
 
-	sprites_folder, err := os.ReadDir(filepath.Join(pwd, sprite_source_folder))
+	sprites_folder, err := os.ReadDir(filepath.Join(pwd, gargs.Sprite_source_folder))
 	if err != nil {
 		log.Fatal(err)
 	} else if len(sprites_folder) == 0 {
-		fmt.Println("Looks like folder ", sprite_source_folder, "is empty...")
+		fmt.Println("Looks like folder ", gargs.Sprite_source_folder, "is empty...")
 	}
 
-	if len(sprites_folder) < *hframes {
-		*hframes = len(sprites_folder)
+	if len(sprites_folder) < gargs.Hframes {
+		gargs.Hframes = len(sprites_folder)
 	}
 
 	if len(sprites_folder) != 0 {
@@ -66,7 +75,7 @@ func Gontage(sprite_source_folder string, hframes *int, sprite_resize_px int, si
 			chunk_images_waitgroup.Add(1)
 			go func(start int, end int) {
 				// Ideally decodeImages would write into all_decoded_images directly.
-				one_chunk_of_decoded_images, decoded_image_names := decodeImages(sprites_folder[start:end], sprite_source_folder, pwd, &chunk_images_waitgroup)
+				one_chunk_of_decoded_images, decoded_image_names := decodeImages(sprites_folder[start:end], gargs.Sprite_source_folder, pwd, &chunk_images_waitgroup)
 				for j, decoded_image := range one_chunk_of_decoded_images {
 					all_decoded_images[start+j] = decoded_image
 					all_decoded_images_names[start+j] = decoded_image_names[j]
@@ -76,8 +85,8 @@ func Gontage(sprite_source_folder string, hframes *int, sprite_resize_px int, si
 		chunk_images_waitgroup.Wait()
 
 		// TODO: refactor we use similiar code in other places as well...
-		if single_sprites && sprite_resize_px != 0 {
-			sprite_source_folder_resized_name := fmt.Sprintf("%v_resized_%vpx", sprite_source_folder, sprite_resize_px)
+		if gargs.Single_sprites && gargs.Sprite_resize_px_resize != 0 {
+			sprite_source_folder_resized_name := fmt.Sprintf("%v_resized_%vpx", gargs.Sprite_source_folder, gargs.Sprite_resize_px_resize)
 			os.Mkdir(sprite_source_folder_resized_name, 0755)
 			encoder := png.Encoder{CompressionLevel: png.BestSpeed}
 			for i, decoded_image := range all_decoded_images {
@@ -86,7 +95,7 @@ func Gontage(sprite_source_folder string, hframes *int, sprite_resize_px int, si
 				if err != nil {
 					panic(err)
 				}
-				resized_image := resize.Resize(uint(sprite_resize_px), uint(sprite_resize_px), decoded_image, resize.Lanczos3)
+				resized_image := resize.Resize(uint(gargs.Sprite_resize_px_resize), uint(gargs.Sprite_resize_px_resize), decoded_image, resize.Lanczos3)
 				if err = encoder.Encode(f, resized_image); err != nil {
 					log.Printf("failed to encode: %v", err)
 				}
@@ -94,16 +103,45 @@ func Gontage(sprite_source_folder string, hframes *int, sprite_resize_px int, si
 				f.Close()
 			}
 			fmt.Println(time.Since(start))
+		} else if gargs.Cut_spritesheet > 0 {
+			sprite_source_folder_resized_name := fmt.Sprintf("%v_cut", gargs.Sprite_source_folder)
+			os.Mkdir(sprite_source_folder_resized_name, 0755)
+			var image_size = gargs.Cut_spritesheet
+			for i, decoded_image := range all_decoded_images {
+				var hframes = decoded_image.Bounds().Dx() / image_size
+				var vframes = decoded_image.Bounds().Dy() / image_size
+				frame_count := 0
+				for v := range vframes {
+					for h := range hframes {
+						cutted_image := image.NewNRGBA(image.Rect(h*image_size, v*image_size, (h*image_size)+image_size, (v*image_size)+image_size))
+						r := image.Rect(h*image_size, v*image_size, (h*image_size)+image_size, (v*image_size)+image_size)
+
+						draw.Draw(cutted_image, r, decoded_image, image.Point{h * image_size, v * image_size}, draw.Over)
+
+						cut_sprite_name := filepath.Join(sprite_source_folder_resized_name, fmt.Sprintf("%v_%v", frame_count, all_decoded_images_names[i]))
+						f, err := os.Create(cut_sprite_name)
+						if err != nil {
+							panic(err)
+						}
+						encoder := png.Encoder{CompressionLevel: png.BestSpeed}
+						if err = encoder.Encode(f, cutted_image); err != nil {
+							log.Printf("failed to encode: %v", err)
+						}
+						frame_count += 1
+					}
+				}
+			}
+			fmt.Println(sprite_source_folder_resized_name, ": ", time.Since(start))
 		} else {
-			spritesheet_width, spritesheet_height, vframes := calcSheetDimensions(*hframes, all_decoded_images)
+			spritesheet_width, spritesheet_height, vframes := calcSheetDimensions(gargs.Hframes, all_decoded_images)
 			spritesheet := image.NewNRGBA(image.Rect(0, 0, spritesheet_width, spritesheet_height))
 			draw.Draw(spritesheet, spritesheet.Bounds(), spritesheet, image.Point{}, draw.Src)
-			decoded_images_to_draw_chunked := sliceChunk(all_decoded_images, *hframes)
+			decoded_images_to_draw_chunked := sliceChunk(all_decoded_images, gargs.Hframes)
 			var make_spritesheet_wg sync.WaitGroup
 			for count_vertical_frames, sprite_chunk := range decoded_images_to_draw_chunked {
 				drawing := drawingInfo{
 					sprites:     sprite_chunk,
-					hframes:     *hframes,
+					hframes:     gargs.Hframes,
 					vframes:     int(vframes),
 					spritesheet: spritesheet,
 				}
@@ -115,14 +153,14 @@ func Gontage(sprite_source_folder string, hframes *int, sprite_resize_px int, si
 				}(count_vertical_frames, sprite_chunk)
 			}
 			make_spritesheet_wg.Wait()
-			spritesheet_name := fmt.Sprintf("%v_f%v_v%v.png", sprite_source_folder, len(all_decoded_images), vframes)
+			spritesheet_name := fmt.Sprintf("%v_f%v_v%v.png", gargs.Sprite_source_folder, len(all_decoded_images), vframes)
 			f, err := os.Create(spritesheet_name)
 			if err != nil {
 				panic(err)
 			}
 			encoder := png.Encoder{CompressionLevel: png.BestSpeed}
-			if sprite_resize_px != 0 {
-				resized_spritesheet := resize.Resize(uint(*hframes*sprite_resize_px), uint(int(vframes)*sprite_resize_px),
+			if gargs.Sprite_resize_px_resize != 0 {
+				resized_spritesheet := resize.Resize(uint(gargs.Hframes*gargs.Sprite_resize_px_resize), uint(int(vframes)*gargs.Sprite_resize_px_resize),
 					spritesheet, resize.Lanczos3)
 				if err = encoder.Encode(f, resized_spritesheet); err != nil {
 					log.Printf("failed to encode: %v", err)

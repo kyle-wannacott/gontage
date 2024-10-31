@@ -44,6 +44,7 @@ func main() {
 	hframes := flag.Int("hf", 8, "Horizontal Frames: Amount of horizontal frames you want in your spritesheet: default 8.")
 	sprite_resize_px := flag.Int("sr", 0, "Sprite Resize: Resize each sprite to the pixel value provided.")
 	single_sprites := flag.Bool("ss", false, "Single Sprites: Output sprites rather than spritesheet use with -sr flag")
+	cut_spritesheet := flag.Int("c", 0, "Cut spritesheet into size individual sprites")
 	parent_folder_path := flag.String("mf", "", "Multiple Folders: path should be parent folder containing sub folders that contain folders with sprites/images in them. Refer to test_multi for example structure.")
 	useMontage := flag.Bool("montage", false, "Use montage with -mf instead of gontage (if installed)")
 	help := flag.Bool("h", false, "Display help")
@@ -56,7 +57,14 @@ func main() {
 	}
 
 	if *sprite_source_folder != "" {
-		gontage.Gontage(*sprite_source_folder, hframes, *sprite_resize_px, *single_sprites)
+		gontage_args := gontage.GontageArgs{
+			Sprite_source_folder:    *sprite_source_folder,
+			Hframes:                 *hframes,
+			Sprite_resize_px_resize: *sprite_resize_px,
+			Single_sprites:          *single_sprites,
+			Cut_spritesheet:         *cut_spritesheet,
+		}
+		gontage.Gontage(gontage_args)
 	} else {
 		var wg sync.WaitGroup
 		if parent_folder_path != nil {
@@ -68,14 +76,16 @@ func main() {
 				if err != nil {
 					fmt.Println(err)
 				}
-				sub_folder_path_gontage := filepath.Join(*parent_folder_path, sub_folder.Name())
+				sub_folder_path_gontage :=
+					filepath.Join(*parent_folder_path, sub_folder.Name())
 				sub_folder_path := filepath.Join(pwd, *parent_folder_path, sub_folder.Name())
 				folder := folderInfo{
 					sub_folder_path:         sub_folder_path,
 					sub_folder_path_gontage: sub_folder_path_gontage,
 					sprite_source_folder:    *sprite_source_folder,
 				}
-				amount_of_sprites, folder_names, sprite_height, sprite_width := iterate_folder(sub_folder_path, i)
+				amount_of_sprites, folder_names, sprite_height, sprite_width :=
+					iterate_folder(sub_folder_path, i)
 				spritesheet := spritesheet{
 					sprite_height:     sprite_height,
 					sprite_width:      sprite_width,
@@ -121,7 +131,14 @@ func call_gontage_or_montage(i int, spritesheet spritesheet, folder folderInfo, 
 		}
 		fmt.Println(string(out), filepath.Join(folder.sub_folder_path_gontage, folder.folder_name)+"/*", sprite_name)
 	} else {
-		gontage.Gontage(filepath.Join(folder.sub_folder_path_gontage, folder.folder_name), &spritesheet.hframes, spritesheet.sprite_resize_px, false)
+		gontage_args := gontage.GontageArgs{
+			Sprite_source_folder:    filepath.Join(folder.sub_folder_path_gontage, folder.folder_name),
+			Hframes:                 spritesheet.hframes,
+			Sprite_resize_px_resize: spritesheet.sprite_resize_px,
+			Single_sprites:          false,
+			Cut_spritesheet:         0,
+		}
+		gontage.Gontage(gontage_args)
 	}
 }
 
