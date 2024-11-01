@@ -106,7 +106,6 @@ func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string,
 	var sprites_array []image.Image
 	var sprites_names []string
 	for _, sprite := range sprites_folder {
-		fmt.Println(sprite.Name())
 		if !sprite.IsDir() && filepath.Ext(sprite.Name()) == ".png" {
 			if reader, err := os.Open(filepath.Join(pwd, targetFolder, sprite.Name())); err == nil {
 				m, _, err := image.Decode(reader)
