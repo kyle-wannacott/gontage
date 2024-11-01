@@ -44,7 +44,8 @@ func main() {
 	hframes := flag.Int("hf", 8, "Horizontal Frames: Amount of horizontal frames you want in your spritesheet: default 8.")
 	sprite_resize_px := flag.Int("sr", 0, "Sprite Resize: Resize each sprite to the pixel value provided.")
 	single_sprites := flag.Bool("ss", false, "Single Sprites: Output sprites rather than spritesheet use with -sr flag")
-	cut_spritesheet := flag.Int("c", 0, "Cut spritesheet into size individual sprites")
+	cpu_threads := flag.Int("t", 0, "CPU threads available (default max available)")
+	cut_spritesheet := flag.String("c", "", "Example: -c 128x128. Cut spritesheet into size individual sprites. ")
 	parent_folder_path := flag.String("mf", "", "Multiple Folders: path should be parent folder containing sub folders that contain folders with sprites/images in them. Refer to test_multi for example structure.")
 	useMontage := flag.Bool("montage", false, "Use montage with -mf instead of gontage (if installed)")
 	help := flag.Bool("h", false, "Display help")
@@ -55,15 +56,15 @@ func main() {
 		flag.PrintDefaults()
 		os.Exit(0)
 	}
-
+	gontage_args := gontage.GontageArgs{
+		Sprite_source_folder:    filepath.Clean(*sprite_source_folder),
+		Hframes:                 *hframes,
+		Sprite_resize_px_resize: *sprite_resize_px,
+		Single_sprites:          *single_sprites,
+		Cut_spritesheet:         *cut_spritesheet,
+		Cpu_threads:             *cpu_threads,
+	}
 	if *sprite_source_folder != "" {
-		gontage_args := gontage.GontageArgs{
-			Sprite_source_folder:    *sprite_source_folder,
-			Hframes:                 *hframes,
-			Sprite_resize_px_resize: *sprite_resize_px,
-			Single_sprites:          *single_sprites,
-			Cut_spritesheet:         *cut_spritesheet,
-		}
 		gontage.Gontage(gontage_args)
 	} else {
 		var wg sync.WaitGroup
@@ -103,7 +104,7 @@ func main() {
 						go func(i int, folder_name string) {
 							defer wg.Done()
 							folder.folder_name = folder_name
-							call_gontage_or_montage(i, spritesheet, folder, cli)
+							call_gontage_or_montage(i, spritesheet, folder, cli, gontage_args)
 						}(i, folder_name)
 					}
 					wg.Wait()
@@ -114,7 +115,7 @@ func main() {
 	}
 }
 
-func call_gontage_or_montage(i int, spritesheet spritesheet, folder folderInfo, cli cliOptions) {
+func call_gontage_or_montage(i int, spritesheet spritesheet, folder folderInfo, cli cliOptions, gargs gontage.GontageArgs) {
 	spritesheet_width := spritesheet.hframes
 	spritesheet_height := math.Ceil(float64(spritesheet.amount_of_sprites[i]/spritesheet_width) + 1)
 	background_type := "transparent"
@@ -136,7 +137,8 @@ func call_gontage_or_montage(i int, spritesheet spritesheet, folder folderInfo, 
 			Hframes:                 spritesheet.hframes,
 			Sprite_resize_px_resize: spritesheet.sprite_resize_px,
 			Single_sprites:          false,
-			Cut_spritesheet:         0,
+			Cut_spritesheet:         "",
+			Cpu_threads:             gargs.Cpu_threads,
 		}
 		gontage.Gontage(gontage_args)
 	}
@@ -170,10 +172,8 @@ func iterate_folder(file_path_to_walk string, index int) ([]int, []string, int, 
 						log.Fatal(err)
 					}
 					bounds := m.Bounds()
-					w := bounds.Dx()
-					h := bounds.Dy()
-					sprite_height = h
-					sprite_width = w
+					w, h := bounds.Dx(), bounds.Dy()
+					sprite_height, sprite_width = h, w
 					is_first_sprite_in_directory = false
 					reader.Close()
 				}
