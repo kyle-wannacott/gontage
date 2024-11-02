@@ -5,7 +5,12 @@ Create spritesheets from multiple folders of sprites/images up to ~48x+ faster t
 ## Install
 `go install github.com/LeeWannacott/gontage@latest`
 
-## Usage:
+## Features
+* Images to Spritesheet: flags(-f or -mf)
+* Images to Resized images: flags (-f -ss -sr)
+* Spritesheet cut into images: flags (-f -c)
+
+## Help:
 `gontage -h`
 
 ![image](https://github.com/LeeWannacott/gontage/assets/49783296/7b5f2721-5ca8-4508-b072-431536d247bb)
@@ -55,5 +60,3 @@ Reference images [33](https://github.com/LeeWannacott/gontage/blob/main/test_spr
 ## Other Info:
 * Using an appImage for ImageMagick adds around 0.8seconds to startup time when running montage...
 * Building an equivalent in NodeJS took around ~700ms (800ms with Bun) for one folder 7x slower than Gontage (~90ms) and 2x slower than Montage (~350ms).
-
-
