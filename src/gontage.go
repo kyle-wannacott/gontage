@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"image"
 	"image/draw"
-	_ "image/jpeg"
+	"image/jpeg"
 	"image/png"
 	"io/fs"
 	"log"
@@ -189,17 +189,30 @@ func calcSheetDimensions(hframes int, all_decoded_images []image.Image) (int, in
 func spritesToResizedSprites(gargs GontageArgs, all_decoded_images []image.Image, all_decoded_images_names []string, start time.Time) {
 	sprite_source_folder_resized_name := fmt.Sprintf("%v_resized_%vpx", gargs.Sprite_source_folder, gargs.Sprite_resize_px_resize)
 	os.Mkdir(sprite_source_folder_resized_name, 0755)
-	encoder := png.Encoder{CompressionLevel: png.BestSpeed}
+	encoder_png := png.Encoder{CompressionLevel: png.BestSpeed}
+	encoder_jpg := jpeg.Options{Quality: 100}
+	// jpeg.Decode(r io.Reader)
 	for i, decoded_image := range all_decoded_images {
 		sprite_name := strings.Split(all_decoded_images_names[i], ".")
-		resized_sprite_name := fmt.Sprintf("/%v.png", sprite_name[0])
+		var resized_sprite_name string
+		switch sprite_name[1] {
+		case "jpg", "jpeg", "jfif", "pjpeg", "pjp":
+			resized_sprite_name = fmt.Sprintf("/%v.%v", sprite_name[0], sprite_name[1])
+		default:
+			resized_sprite_name = fmt.Sprintf("/%v.png", sprite_name[0])
+		}
 		f, err := os.Create(sprite_source_folder_resized_name + resized_sprite_name)
 		if err != nil {
 			panic(err)
 		}
 		resized_image := resize.Resize(uint(gargs.Sprite_resize_px_resize), uint(gargs.Sprite_resize_px_resize), decoded_image, resize.Lanczos3)
-		if err = encoder.Encode(f, resized_image); err != nil {
-			log.Printf("failed to encode: %v", err)
+		switch sprite_name[1] {
+		case "jpg", "jpeg", "jfif", "pjpeg", "pjp":
+			jpeg.Encode(f, resized_image, &encoder_jpg)
+		default:
+			if err = encoder_png.Encode(f, resized_image); err != nil {
+				log.Printf("failed to encode: %v", err)
+			}
 		}
 		fmt.Println(sprite_source_folder_resized_name + resized_sprite_name)
 		f.Close()
