@@ -55,6 +55,7 @@ func Gontage(gargs GontageArgs) {
 	} else if len(sprites_folder) == 0 {
 		fmt.Println("Looks like folder ", gargs.Sprite_source_folder, "is empty...")
 	}
+	sprites_folder = cleanSpritesFolder(sprites_folder)
 
 	if len(sprites_folder) < gargs.Hframes {
 		gargs.Hframes = len(sprites_folder)
@@ -103,6 +104,20 @@ func Gontage(gargs GontageArgs) {
 	}
 }
 
+func cleanSpritesFolder(sprites_folder []fs.DirEntry) []fs.DirEntry {
+	var temp_sprites_folder []fs.DirEntry
+	for _, sprite := range sprites_folder {
+		switch filepath.Ext(sprite.Name()) {
+		case ".meta":
+			continue
+		default:
+			temp_sprites_folder = append(temp_sprites_folder, sprite)
+		}
+	}
+	sprites_folder = temp_sprites_folder
+	return sprites_folder
+}
+
 func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string, wg *sync.WaitGroup) ([]image.Image, []string) {
 	defer wg.Done()
 	var sprites_array []image.Image
@@ -119,6 +134,7 @@ func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string,
 					}
 					sprites_array = append(sprites_array, s)
 					sprites_names = append(sprites_names, sprite.Name())
+					reader.Close()
 				default:
 					s, t, err := image.Decode(reader)
 					if err != nil {
@@ -126,8 +142,8 @@ func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string,
 					}
 					sprites_array = append(sprites_array, s)
 					sprites_names = append(sprites_names, sprite.Name())
+					reader.Close()
 				}
-				reader.Close()
 			}
 		}
 	}

@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	gontage "github.com/LeeWannacott/gontage/src"
+	gontage "github.com/leewannacott/gontage/src"
 )
 
 type spritesheet struct {
