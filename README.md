@@ -8,7 +8,7 @@ Create spritesheets from multiple folders of sprites/images up to ~48x+ faster t
 ## Features
 * Images to Spritesheet: flags(-f or -mf)
 * Images to Resized images: flags (-f -ss -sr)
-* Spritesheet cut into images: flags (-f -c)
+* Spritesheet cut into images: flags (-f -x)
 
 ## Help:
 `gontage -h`

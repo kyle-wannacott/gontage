@@ -45,7 +45,7 @@ func main() {
 	sprite_resize_px := flag.Int("sr", 0, "Sprite Resize: Resize each sprite to the pixel value provided.")
 	single_sprites := flag.Bool("ss", false, "Single Sprites: Output sprites rather than spritesheet use with -sr flag")
 	cpu_threads := flag.Int("t", 0, "CPU threads available (default max available)")
-	cut_spritesheet := flag.String("c", "", "Example: -c 128x128. Cut spritesheet into size individual sprites. ")
+	cut_spritesheet := flag.String("x", "", "Example: -x 128x128. Cut spritesheet into size individual sprites. ")
 	parent_folder_path := flag.String("mf", "", "Multiple Folders: path should be parent folder containing sub folders that contain folders with sprites/images in them. Refer to test_multi for example structure.")
 	useMontage := flag.Bool("montage", false, "Use montage with -mf instead of gontage (if installed)")
 	help := flag.Bool("h", false, "Display help")
@@ -73,7 +73,7 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			for i, sub_folder := range parent_folder {
+			for _, sub_folder := range parent_folder {
 				if err != nil {
 					fmt.Println(err)
 				}
@@ -86,7 +86,7 @@ func main() {
 					sprite_source_folder:    *sprite_source_folder,
 				}
 				amount_of_sprites, folder_names, sprite_height, sprite_width :=
-					iterate_folder(sub_folder_path, i)
+					iterate_folder(sub_folder_path)
 				spritesheet := spritesheet{
 					sprite_height:     sprite_height,
 					sprite_width:      sprite_width,
@@ -144,7 +144,7 @@ func call_gontage_or_montage(i int, spritesheet spritesheet, folder folderInfo, 
 	}
 }
 
-func iterate_folder(file_path_to_walk string, index int) ([]int, []string, int, int) {
+func iterate_folder(file_path_to_walk string) ([]int, []string, int, int) {
 	is_first_sprite_in_directory := true
 	folder_names := []string{}
 	amount_of_sprites := []int{}

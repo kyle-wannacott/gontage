@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dblezek/tga"
 	"github.com/nfnt/resize"
 )
 
@@ -34,6 +35,7 @@ type GontageArgs struct {
 	Sprite_resize_px_resize int
 	Single_sprites          bool
 	Cut_spritesheet         string
+	Convert_sprites         string
 	Cpu_threads             int
 }
 
@@ -91,7 +93,7 @@ func Gontage(gargs GontageArgs) {
 		}
 		chunk_images_waitgroup.Wait()
 
-		if gargs.Single_sprites && gargs.Sprite_resize_px_resize != 0 {
+		if gargs.Single_sprites {
 			spritesToResizedSprites(gargs, all_decoded_images, all_decoded_images_names, start)
 		} else if gargs.Cut_spritesheet != "" {
 			cutSpritesheetIntoSprites(gargs, all_decoded_images, all_decoded_images_names, start)
@@ -106,14 +108,25 @@ func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string,
 	var sprites_array []image.Image
 	var sprites_names []string
 	for _, sprite := range sprites_folder {
-		if !sprite.IsDir() && filepath.Ext(sprite.Name()) == ".png" {
+		if !sprite.IsDir() {
 			if reader, err := os.Open(filepath.Join(pwd, targetFolder, sprite.Name())); err == nil {
-				m, _, err := image.Decode(reader)
-				if err != nil {
-					log.Fatalln(err)
+				switch filepath.Ext(sprite.Name()) {
+				// TODO: refactor cases with duplicated logic
+				case ".tga":
+					s, err := tga.Decode(reader)
+					if err != nil {
+						log.Fatalln(err)
+					}
+					sprites_array = append(sprites_array, s)
+					sprites_names = append(sprites_names, sprite.Name())
+				default:
+					s, t, err := image.Decode(reader)
+					if err != nil {
+						log.Fatalln(err, t)
+					}
+					sprites_array = append(sprites_array, s)
+					sprites_names = append(sprites_names, sprite.Name())
 				}
-				sprites_array = append(sprites_array, m)
-				sprites_names = append(sprites_names, sprite.Name())
 				reader.Close()
 			}
 		}
@@ -162,7 +175,8 @@ func spritesToResizedSprites(gargs GontageArgs, all_decoded_images []image.Image
 	os.Mkdir(sprite_source_folder_resized_name, 0755)
 	encoder := png.Encoder{CompressionLevel: png.BestSpeed}
 	for i, decoded_image := range all_decoded_images {
-		resized_sprite_name := fmt.Sprintf("/%v", all_decoded_images_names[i])
+		sprite_name := strings.Split(all_decoded_images_names[i], ".")
+		resized_sprite_name := fmt.Sprintf("/%v.png", sprite_name[0])
 		f, err := os.Create(sprite_source_folder_resized_name + resized_sprite_name)
 		if err != nil {
 			panic(err)
