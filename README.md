@@ -8,6 +8,7 @@ Create spritesheets from multiple folders of sprites/images up to ~48x+ faster t
 ## Features
 * Images to Spritesheet: flags(-f or -mf)
 * Images to Resized images: flags (-f -ss -sr)
+* Single Image Resize: flags (-i -sr)
 * Spritesheet cut into images: flags (-f -x)
 
 ## Help:
@@ -15,7 +16,15 @@ Create spritesheets from multiple folders of sprites/images up to ~48x+ faster t
 
 ![image](https://github.com/LeeWannacott/gontage/assets/49783296/7b5f2721-5ca8-4508-b072-431536d247bb)
 
-## Example:
+## Examples:
+
+### Single Image Resize:
+```bash
+gontage -i myimage.png -sr 64
+```
+This will resize `myimage.png` to 64x64 pixels and save it as `myimage_resized_64px.png`
+
+### Spritesheet Creation:
 ![image](https://github.com/LeeWannacott/gontage/assets/49783296/c0c35076-5a54-4295-bab0-45385a0dd31d)
 
 

@@ -31,6 +31,7 @@ type drawingInfo struct {
 
 type GontageArgs struct {
 	Sprite_source_folder    string
+	Image_path              string
 	Hframes                 int
 	Sprite_resize_px_resize int
 	Single_sprites          bool
@@ -305,4 +306,71 @@ func spritesToSpritesheet(gargs GontageArgs, all_decoded_images []image.Image, a
 
 	f.Close()
 	fmt.Println(spritesheet_name, ": ", time.Since(start))
+}
+
+func ResizeSingleImage(gargs GontageArgs) {
+	start := time.Now()
+
+	if gargs.Sprite_resize_px_resize == 0 {
+		fmt.Println("Error: -sr flag is required when using -i flag to specify resize dimensions")
+		os.Exit(1)
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(gargs.Image_path); os.IsNotExist(err) {
+		fmt.Printf("Error: Image file '%s' does not exist\n", gargs.Image_path)
+		os.Exit(1)
+	}
+
+	// Open and decode the image
+	reader, err := os.Open(gargs.Image_path)
+	if err != nil {
+		log.Fatalf("Error opening image: %v", err)
+	}
+	defer reader.Close()
+
+	var decoded_image image.Image
+	switch filepath.Ext(gargs.Image_path) {
+	case ".tga":
+		decoded_image, err = tga.Decode(reader)
+		if err != nil {
+			log.Fatalf("Error decoding TGA image: %v", err)
+		}
+	default:
+		decoded_image, _, err = image.Decode(reader)
+		if err != nil {
+			log.Fatalf("Error decoding image: %v", err)
+		}
+	}
+
+	// Resize the image
+	resized_image := resize.Resize(uint(gargs.Sprite_resize_px_resize), uint(gargs.Sprite_resize_px_resize), decoded_image, resize.Lanczos3)
+
+	// Generate output filename
+	file_ext := filepath.Ext(gargs.Image_path)
+	file_name_without_ext := strings.TrimSuffix(filepath.Base(gargs.Image_path), file_ext)
+	output_filename := fmt.Sprintf("%s_resized_%dpx%s", file_name_without_ext, gargs.Sprite_resize_px_resize, file_ext)
+
+	// Create output file
+	output_file, err := os.Create(output_filename)
+	if err != nil {
+		log.Fatalf("Error creating output file: %v", err)
+	}
+	defer output_file.Close()
+
+	// Encode and save the resized image
+	switch strings.ToLower(file_ext) {
+	case ".jpg", ".jpeg", ".jfif", ".pjpeg", ".pjp":
+		encoder_jpg := jpeg.Options{Quality: 100}
+		err = jpeg.Encode(output_file, resized_image, &encoder_jpg)
+	default:
+		encoder_png := png.Encoder{CompressionLevel: png.BestSpeed}
+		err = encoder_png.Encode(output_file, resized_image)
+	}
+
+	if err != nil {
+		log.Fatalf("Error encoding resized image: %v", err)
+	}
+
+	fmt.Printf("Resized image saved as: %s (took %v)\n", output_filename, time.Since(start))
 }

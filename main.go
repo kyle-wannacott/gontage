@@ -41,6 +41,7 @@ func main() {
 		os.Exit(1)
 	}
 	sprite_source_folder := flag.String("f", "", "Folder name that contains sprites.")
+	image_path := flag.String("i", "", "Image path for resizing single image (requires -sr flag)")
 	hframes := flag.Int("hf", 8, "Horizontal Frames: Amount of horizontal frames you want in your spritesheet: default 8.")
 	sprite_resize_px := flag.Int("sr", 0, "Sprite Resize: Resize each sprite to the pixel value provided.")
 	single_sprites := flag.Bool("ss", false, "Single Sprites: Output sprites rather than spritesheet use with -sr flag")
@@ -58,13 +59,16 @@ func main() {
 	}
 	gontage_args := gontage.GontageArgs{
 		Sprite_source_folder:    filepath.Clean(*sprite_source_folder),
+		Image_path:              filepath.Clean(*image_path),
 		Hframes:                 *hframes,
 		Sprite_resize_px_resize: *sprite_resize_px,
 		Single_sprites:          *single_sprites,
 		Cut_spritesheet:         *cut_spritesheet,
 		Cpu_threads:             *cpu_threads,
 	}
-	if *sprite_source_folder != "" {
+	if *image_path != "" {
+		gontage.ResizeSingleImage(gontage_args)
+	} else if *sprite_source_folder != "" {
 		gontage.Gontage(gontage_args)
 	} else {
 		var wg sync.WaitGroup
