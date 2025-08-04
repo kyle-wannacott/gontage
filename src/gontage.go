@@ -17,6 +17,8 @@ import (
 	"sync"
 	"time"
 
+	"image/color"
+
 	"github.com/dblezek/tga"
 	"github.com/nfnt/resize"
 )
@@ -34,6 +36,8 @@ type GontageArgs struct {
 	Image_path              string
 	Hframes                 int
 	Sprite_resize_px_resize int
+	Fade_amount             int
+	Fade_mode               string
 	Single_sprites          bool
 	Cut_spritesheet         string
 	Convert_sprites         string
@@ -86,7 +90,7 @@ func Gontage(gargs GontageArgs) {
 			chunk_images_waitgroup.Add(1)
 			go func(start int, end int) {
 				// Ideally decodeImages would write into all_decoded_images directly.
-				one_chunk_of_decoded_images, decoded_image_names := decodeImages(sprites_folder[start:end], gargs.Sprite_source_folder, pwd, &chunk_images_waitgroup)
+				one_chunk_of_decoded_images, decoded_image_names := decodeImages(sprites_folder[start:end], gargs.Sprite_source_folder, pwd, &chunk_images_waitgroup, gargs.Fade_amount, gargs.Fade_mode)
 				for j, decoded_image := range one_chunk_of_decoded_images {
 					all_decoded_images[start+j] = decoded_image
 					all_decoded_images_names[start+j] = decoded_image_names[j]
@@ -119,13 +123,14 @@ func cleanSpritesFolder(sprites_folder []fs.DirEntry) []fs.DirEntry {
 	return sprites_folder
 }
 
-func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string, wg *sync.WaitGroup) ([]image.Image, []string) {
+func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string, wg *sync.WaitGroup, fadeAmount int, fadeMode string) ([]image.Image, []string) {
 	defer wg.Done()
 	var sprites_array []image.Image
 	var sprites_names []string
 	for _, sprite := range sprites_folder {
 		if !sprite.IsDir() {
 			if reader, err := os.Open(filepath.Join(pwd, targetFolder, sprite.Name())); err == nil {
+				var decoded_sprite image.Image
 				switch filepath.Ext(sprite.Name()) {
 				// TODO: refactor cases with duplicated logic
 				case ".tga":
@@ -133,18 +138,24 @@ func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string,
 					if err != nil {
 						log.Fatalln(err)
 					}
-					sprites_array = append(sprites_array, s)
-					sprites_names = append(sprites_names, sprite.Name())
+					decoded_sprite = s
 					reader.Close()
 				default:
 					s, t, err := image.Decode(reader)
 					if err != nil {
 						log.Fatalln(err, t)
 					}
-					sprites_array = append(sprites_array, s)
-					sprites_names = append(sprites_names, sprite.Name())
+					decoded_sprite = s
 					reader.Close()
 				}
+
+				// Apply fading if specified
+				if fadeAmount > 0 {
+					decoded_sprite = applyFading(decoded_sprite, fadeAmount, fadeMode)
+				}
+
+				sprites_array = append(sprites_array, decoded_sprite)
+				sprites_names = append(sprites_names, sprite.Name())
 			}
 		}
 	}
@@ -195,26 +206,45 @@ func spritesToResizedSprites(gargs GontageArgs, all_decoded_images []image.Image
 	// jpeg.Decode(r io.Reader)
 	for i, decoded_image := range all_decoded_images {
 		sprite_name := strings.Split(all_decoded_images_names[i], ".")
-		var resized_sprite_name string
-		switch sprite_name[1] {
-		case "jpg", "jpeg", "jfif", "pjpeg", "pjp":
-			resized_sprite_name = fmt.Sprintf("/%v.%v", sprite_name[0], sprite_name[1])
-		default:
-			resized_sprite_name = fmt.Sprintf("/%v.png", sprite_name[0])
+
+		// Apply resize first
+		resized_image := resize.Resize(uint(gargs.Sprite_resize_px_resize), uint(gargs.Sprite_resize_px_resize), decoded_image, resize.Lanczos3)
+
+		// Apply fading if specified
+		if gargs.Fade_amount > 0 {
+			resized_image = applyFading(resized_image, gargs.Fade_amount, gargs.Fade_mode)
 		}
+
+		// Determine output format - force PNG for faded JPG images
+		output_as_png := gargs.Fade_amount > 0 && (sprite_name[1] == "jpg" || sprite_name[1] == "jpeg" || sprite_name[1] == "jfif" || sprite_name[1] == "pjpeg" || sprite_name[1] == "pjp")
+
+		var resized_sprite_name string
+		if output_as_png {
+			resized_sprite_name = fmt.Sprintf("/%v.png", sprite_name[0])
+		} else {
+			switch sprite_name[1] {
+			case "jpg", "jpeg", "jfif", "pjpeg", "pjp":
+				resized_sprite_name = fmt.Sprintf("/%v.%v", sprite_name[0], sprite_name[1])
+			default:
+				resized_sprite_name = fmt.Sprintf("/%v.png", sprite_name[0])
+			}
+		}
+
+		// Create the output file
 		f, err := os.Create(sprite_source_folder_resized_name + resized_sprite_name)
 		if err != nil {
 			panic(err)
 		}
-		resized_image := resize.Resize(uint(gargs.Sprite_resize_px_resize), uint(gargs.Sprite_resize_px_resize), decoded_image, resize.Lanczos3)
-		switch sprite_name[1] {
-		case "jpg", "jpeg", "jfif", "pjpeg", "pjp":
-			jpeg.Encode(f, resized_image, &encoder_jpg)
-		default:
+
+		// Encode based on output format
+		if output_as_png || sprite_name[1] == "png" {
 			if err = encoder_png.Encode(f, resized_image); err != nil {
 				log.Printf("failed to encode: %v", err)
 			}
+		} else {
+			jpeg.Encode(f, resized_image, &encoder_jpg)
 		}
+
 		fmt.Println(sprite_source_folder_resized_name + resized_sprite_name)
 		f.Close()
 	}
@@ -244,6 +274,16 @@ func cutSpritesheetIntoSprites(gargs GontageArgs, all_decoded_images []image.Ima
 					cutted_image := image.NewNRGBA(image.Rect(h*image_size_x, v*image_size_y, (h*image_size_x)+image_size_x, (v*image_size_y)+image_size_y))
 					r := image.Rect(h*image_size_x, v*image_size_y, (h*image_size_x)+image_size_x, (v*image_size_y)+image_size_y)
 					draw.Draw(cutted_image, r, decoded_image, image.Point{h * image_size_x, v * image_size_y}, draw.Over)
+
+					// Apply fading if specified
+					if gargs.Fade_amount > 0 {
+						faded := applyFading(cutted_image, gargs.Fade_amount, gargs.Fade_mode)
+						// Convert RGBA to NRGBA
+						bounds := faded.Bounds()
+						nrgbaImg := image.NewNRGBA(bounds)
+						draw.Draw(nrgbaImg, bounds, faded, bounds.Min, draw.Src)
+						cutted_image = nrgbaImg
+					}
 					folder_name := strings.Split(all_decoded_images_names[i], ".")
 					cut_sprite_name := filepath.Join(fmt.Sprintf("%v.png", frame_count))
 					os.Mkdir(filepath.Join(gargs.Sprite_source_folder, folder_name[0]), 0755)
@@ -286,6 +326,8 @@ func spritesToSpritesheet(gargs GontageArgs, all_decoded_images []image.Image, a
 		}(count_vertical_frames, sprite_chunk)
 	}
 	make_spritesheet_wg.Wait()
+
+	// Note: Fading is applied to individual sprites before assembly, not to the spritesheet itself
 	spritesheet_name := fmt.Sprintf("%v_f%v_v%v.png", gargs.Sprite_source_folder, len(all_decoded_images), vframes)
 	f, err := os.Create(spritesheet_name)
 	if err != nil {
@@ -306,6 +348,115 @@ func spritesToSpritesheet(gargs GontageArgs, all_decoded_images []image.Image, a
 
 	f.Close()
 	fmt.Println(spritesheet_name, ": ", time.Since(start))
+}
+
+func applyFading(img image.Image, fadeAmount int, fadeMode string) *image.RGBA {
+	if fadeAmount <= 0 || fadeAmount > 100 {
+		// Convert to RGBA to maintain consistent return type
+		bounds := img.Bounds()
+		rgbaImg := image.NewRGBA(bounds)
+		draw.Draw(rgbaImg, bounds, img, bounds.Min, draw.Src)
+		return rgbaImg
+	}
+
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+
+	// Create new RGBA image to handle transparency properly
+	fadedImg := image.NewRGBA(bounds)
+
+	// Calculate dimensions for fading
+	centerX := float64(width) / 2.0
+	centerY := float64(height) / 2.0
+
+	var fadeDistanceX, fadeDistanceY float64
+
+	if fadeMode == "s" {
+		// Square fading
+		fadeDistanceX = centerX * (float64(fadeAmount) / 100.0)
+		fadeDistanceY = centerY * (float64(fadeAmount) / 100.0)
+	} else {
+		// Circle fading (default)
+		maxRadius := math.Min(centerX, centerY)
+		fadeRadius := maxRadius * (float64(fadeAmount) / 100.0)
+		fadeDistanceX = fadeRadius
+		fadeDistanceY = fadeRadius
+	}
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			// Get original pixel - use direct RGBA conversion to avoid color space issues
+			origColor := color.RGBAModel.Convert(img.At(x, y)).(color.RGBA)
+
+			var alphaMultiplier float64 = 1.0
+
+			if fadeMode == "s" {
+				// Square fading
+				dx := math.Abs(float64(x) - centerX)
+				dy := math.Abs(float64(y) - centerY)
+
+				// Calculate fade progress based on both dimensions
+				var fadeProgress float64
+
+				if dx > centerX-fadeDistanceX && dy > centerY-fadeDistanceY {
+					// Corner region - use combined distance
+					xProgress := (dx - (centerX - fadeDistanceX)) / fadeDistanceX
+					yProgress := (dy - (centerY - fadeDistanceY)) / fadeDistanceY
+					fadeProgress = math.Max(xProgress, yProgress)
+				} else if dx > centerX-fadeDistanceX {
+					// X edge region
+					fadeProgress = (dx - (centerX - fadeDistanceX)) / fadeDistanceX
+				} else if dy > centerY-fadeDistanceY {
+					// Y edge region
+					fadeProgress = (dy - (centerY - fadeDistanceY)) / fadeDistanceY
+				} else {
+					// Inside the non-faded area
+					fadeProgress = 0
+				}
+
+				if fadeProgress >= 1.0 {
+					alphaMultiplier = 0.0 // Fully transparent
+				} else if fadeProgress <= 0 {
+					alphaMultiplier = 1.0 // Fully opaque
+				} else {
+					alphaMultiplier = 1.0 - fadeProgress
+				}
+			} else {
+				// Circle fading (default)
+				dx := float64(x) - centerX
+				dy := float64(y) - centerY
+				distance := math.Sqrt(dx*dx + dy*dy)
+				maxRadius := math.Min(centerX, centerY)
+
+				if distance <= maxRadius-fadeDistanceX {
+					// Inside the non-faded area - full opacity
+					alphaMultiplier = 1.0
+				} else if distance >= maxRadius {
+					// Outside the circle - fully transparent
+					alphaMultiplier = 0.0
+				} else {
+					// In the fade zone - gradient
+					fadeProgress := (distance - (maxRadius - fadeDistanceX)) / fadeDistanceX
+					alphaMultiplier = 1.0 - fadeProgress
+				}
+			}
+
+			// Apply alpha multiplier to original alpha and adjust RGB values to avoid artifacts
+			newAlpha := uint8(float64(origColor.A) * alphaMultiplier)
+			newR := uint8(float64(origColor.R) * alphaMultiplier)
+			newG := uint8(float64(origColor.G) * alphaMultiplier)
+			newB := uint8(float64(origColor.B) * alphaMultiplier)
+			fadedImg.Set(x, y, color.RGBA{
+				R: newR,
+				G: newG,
+				B: newB,
+				A: newAlpha,
+			})
+		}
+	}
+
+	return fadedImg
 }
 
 func ResizeSingleImage(gargs GontageArgs) {
@@ -346,10 +497,26 @@ func ResizeSingleImage(gargs GontageArgs) {
 	// Resize the image
 	resized_image := resize.Resize(uint(gargs.Sprite_resize_px_resize), uint(gargs.Sprite_resize_px_resize), decoded_image, resize.Lanczos3)
 
+	// Apply fading if specified
+	if gargs.Fade_amount > 0 {
+		resized_image = applyFading(resized_image, gargs.Fade_amount, gargs.Fade_mode)
+	}
+
 	// Generate output filename
 	file_ext := filepath.Ext(gargs.Image_path)
 	file_name_without_ext := strings.TrimSuffix(filepath.Base(gargs.Image_path), file_ext)
-	output_filename := fmt.Sprintf("%s_resized_%dpx%s", file_name_without_ext, gargs.Sprite_resize_px_resize, file_ext)
+
+	var output_filename string
+	var should_output_png bool
+
+	// Check if we need to force PNG output (faded JPG images)
+	if gargs.Fade_amount > 0 && (strings.ToLower(file_ext) == ".jpg" || strings.ToLower(file_ext) == ".jpeg" || strings.ToLower(file_ext) == ".jfif" || strings.ToLower(file_ext) == ".pjpeg" || strings.ToLower(file_ext) == ".pjp") {
+		output_filename = fmt.Sprintf("%s_resized_%dpx.png", file_name_without_ext, gargs.Sprite_resize_px_resize)
+		should_output_png = true
+	} else {
+		output_filename = fmt.Sprintf("%s_resized_%dpx%s", file_name_without_ext, gargs.Sprite_resize_px_resize, file_ext)
+		should_output_png = false
+	}
 
 	// Create output file
 	output_file, err := os.Create(output_filename)
@@ -359,13 +526,18 @@ func ResizeSingleImage(gargs GontageArgs) {
 	defer output_file.Close()
 
 	// Encode and save the resized image
-	switch strings.ToLower(file_ext) {
-	case ".jpg", ".jpeg", ".jfif", ".pjpeg", ".pjp":
-		encoder_jpg := jpeg.Options{Quality: 100}
-		err = jpeg.Encode(output_file, resized_image, &encoder_jpg)
-	default:
+	if should_output_png {
 		encoder_png := png.Encoder{CompressionLevel: png.BestSpeed}
 		err = encoder_png.Encode(output_file, resized_image)
+	} else {
+		switch strings.ToLower(file_ext) {
+		case ".jpg", ".jpeg", ".jfif", ".pjpeg", ".pjp":
+			encoder_jpg := jpeg.Options{Quality: 100}
+			err = jpeg.Encode(output_file, resized_image, &encoder_jpg)
+		default:
+			encoder_png := png.Encoder{CompressionLevel: png.BestSpeed}
+			err = encoder_png.Encode(output_file, resized_image)
+		}
 	}
 
 	if err != nil {

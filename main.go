@@ -16,6 +16,8 @@ import (
 	gontage "github.com/leewannacott/gontage/src"
 )
 
+const version = "v1.5.0"
+
 type spritesheet struct {
 	sprite_height     int
 	sprite_width      int
@@ -44,12 +46,15 @@ func main() {
 	image_path := flag.String("i", "", "Image path for resizing single image (requires -sr flag)")
 	hframes := flag.Int("hf", 8, "Horizontal Frames: Amount of horizontal frames you want in your spritesheet: default 8.")
 	sprite_resize_px := flag.Int("sr", 0, "Sprite Resize: Resize each sprite to the pixel value provided.")
+	fade_amount := flag.Int("fade", 0, "Fade Amount: Apply fading to edges (0-100, where 0=no fade, 50=half radius fade, 100=full radius fade)")
+	fade_mode := flag.String("fm", "c", "Fade Mode: 'c' for circle (default), 's' for square")
 	single_sprites := flag.Bool("ss", false, "Single Sprites: Output sprites rather than spritesheet use with -sr flag")
 	cpu_threads := flag.Int("t", 0, "CPU threads available (default max available)")
 	cut_spritesheet := flag.String("x", "", "Example: -x 128x128. Cut spritesheet into size individual sprites. ")
 	parent_folder_path := flag.String("mf", "", "Multiple Folders: path should be parent folder containing sub folders that contain folders with sprites/images in them. Refer to test_multi for example structure.")
 	useMontage := flag.Bool("montage", false, "Use montage with -mf instead of gontage (if installed)")
 	help := flag.Bool("h", false, "Display help")
+	showVersion := flag.Bool("v", false, "Display version")
 	flag.Parse()
 
 	if *help {
@@ -57,11 +62,18 @@ func main() {
 		flag.PrintDefaults()
 		os.Exit(0)
 	}
+
+	if *showVersion {
+		fmt.Printf("gontage %s\n", version)
+		os.Exit(0)
+	}
 	gontage_args := gontage.GontageArgs{
 		Sprite_source_folder:    filepath.Clean(*sprite_source_folder),
 		Image_path:              filepath.Clean(*image_path),
 		Hframes:                 *hframes,
 		Sprite_resize_px_resize: *sprite_resize_px,
+		Fade_amount:             *fade_amount,
+		Fade_mode:               *fade_mode,
 		Single_sprites:          *single_sprites,
 		Cut_spritesheet:         *cut_spritesheet,
 		Cpu_threads:             *cpu_threads,
@@ -140,6 +152,8 @@ func call_gontage_or_montage(i int, spritesheet spritesheet, folder folderInfo, 
 			Sprite_source_folder:    filepath.Join(folder.sub_folder_path_gontage, folder.folder_name),
 			Hframes:                 spritesheet.hframes,
 			Sprite_resize_px_resize: spritesheet.sprite_resize_px,
+			Fade_amount:             gargs.Fade_amount,
+			Fade_mode:               gargs.Fade_mode,
 			Single_sprites:          false,
 			Cut_spritesheet:         "",
 			Cpu_threads:             gargs.Cpu_threads,

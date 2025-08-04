@@ -1,4 +1,4 @@
-# Gontage
+# Gontage v1.5.0
 
 Create spritesheets from multiple folders of sprites/images up to ~48x+ faster than ImageMagicks `montage` command.
 
@@ -10,6 +10,7 @@ Create spritesheets from multiple folders of sprites/images up to ~48x+ faster t
 * Images to Resized images: flags (-f -ss -sr)
 * Single Image Resize: flags (-i -sr)
 * Spritesheet cut into images: flags (-f -x)
+* Circular/Square Fading: flags (-fade, -fm) - applies to all operations
 
 ## Help:
 `gontage -h`
@@ -23,6 +24,44 @@ Create spritesheets from multiple folders of sprites/images up to ~48x+ faster t
 gontage -i myimage.png -sr 64
 ```
 This will resize `myimage.png` to 64x64 pixels and save it as `myimage_resized_64px.png`
+
+### Single Image Resize with Fading:
+```bash
+gontage -i myimage.png -sr 64 -fade 30
+```
+This will resize and apply circular fading with 30% radius fade to transparency
+
+```bash
+gontage -i myimage.jpg -sr 64 -fade 30 -fm s
+```
+This will resize a JPG image, apply square fading, and automatically save as PNG
+
+**Note:** Fading preserves original colors and only modifies the alpha channel for smooth transparency transitions.
+
+**Fade Values:**
+- `0` = No fading (sharp edges)
+- `25` = Light fading (25% of radius fades to transparent)
+- `50` = Medium fading (50% of radius fades to transparent)
+- `75` = Heavy fading (75% of radius fades to transparent)
+- `100` = Full fading (entire radius fades from center to edge)
+
+**Fade Modes:**
+- `-fm c` = Circular fading (default)
+- `-fm s` = Square fading
+
+**Important:** JPG images with fading are automatically converted to PNG format to preserve transparency.
+
+### Folder Processing with Fading:
+```bash
+gontage -f sprites_folder -hf 4 -sr 32 -fade 25 -fm c
+```
+Creates a spritesheet with circular faded edges on each sprite
+
+### Individual Resized Sprites with Fading:
+```bash
+gontage -f sprites_folder -ss -sr 64 -fade 40 -fm s
+```
+Outputs individual resized sprites with square fading applied (JPG files become PNG)
 
 ### Spritesheet Creation:
 ![image](https://github.com/LeeWannacott/gontage/assets/49783296/c0c35076-5a54-4295-bab0-45385a0dd31d)
