@@ -1,4 +1,4 @@
-module github.com/leewannacott/gontage
+module github.com/kyle-wannacott/gontage
 
 go 1.23
 

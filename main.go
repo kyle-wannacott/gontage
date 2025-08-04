@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	gontage "github.com/leewannacott/gontage/src"
+	gontage "github.com/kyle-wannacott/gontage/src"
 )
 
 const version = "v1.5.0"

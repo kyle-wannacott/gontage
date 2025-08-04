@@ -3,7 +3,7 @@
 Create spritesheets from multiple folders of sprites/images up to ~48x+ faster than ImageMagicks `montage` command.
 
 ## Install
-`go install github.com/LeeWannacott/gontage@latest`
+`go install github.com/kyle-wannacott/gontage@latest`
 
 ## Features
 * Images to Spritesheet: flags(-f or -mf)
