@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -53,6 +54,7 @@ func main() {
 	cut_spritesheet := flag.String("x", "", "Example: -x 128x128. Cut spritesheet into size individual sprites. ")
 	parent_folder_path := flag.String("mf", "", "Multiple Folders: path should be parent folder containing sub folders that contain folders with sprites/images in them. Refer to test_multi for example structure.")
 	useMontage := flag.Bool("montage", false, "Use montage with -mf instead of gontage (if installed)")
+	fix_png_checksum := flag.Bool("fix-png", false, "Fix PNG checksum errors by re-encoding the image")
 	help := flag.Bool("h", false, "Display help")
 	showVersion := flag.Bool("v", false, "Display version")
 	flag.Parse()
@@ -77,6 +79,7 @@ func main() {
 		Single_sprites:          *single_sprites,
 		Cut_spritesheet:         *cut_spritesheet,
 		Cpu_threads:             *cpu_threads,
+		Fix_png_checksum:        *fix_png_checksum,
 	}
 	if *image_path != "" {
 		gontage.ResizeSingleImage(gontage_args)
@@ -102,7 +105,7 @@ func main() {
 					sprite_source_folder:    *sprite_source_folder,
 				}
 				amount_of_sprites, folder_names, sprite_height, sprite_width :=
-					iterate_folder(sub_folder_path)
+					iterate_folder(sub_folder_path, *fix_png_checksum)
 				spritesheet := spritesheet{
 					sprite_height:     sprite_height,
 					sprite_width:      sprite_width,
@@ -157,12 +160,13 @@ func call_gontage_or_montage(i int, spritesheet spritesheet, folder folderInfo, 
 			Single_sprites:          false,
 			Cut_spritesheet:         "",
 			Cpu_threads:             gargs.Cpu_threads,
+			Fix_png_checksum:        gargs.Fix_png_checksum,
 		}
 		gontage.Gontage(gontage_args)
 	}
 }
 
-func iterate_folder(file_path_to_walk string) ([]int, []string, int, int) {
+func iterate_folder(file_path_to_walk string, fixPngChecksum bool) ([]int, []string, int, int) {
 	is_first_sprite_in_directory := true
 	folder_names := []string{}
 	amount_of_sprites := []int{}
@@ -187,13 +191,34 @@ func iterate_folder(file_path_to_walk string) ([]int, []string, int, int) {
 				if reader, err := os.Open(path); err == nil {
 					m, _, err := image.Decode(reader)
 					if err != nil {
-						log.Fatal(err)
+						reader.Close()
+						// Try to fix PNG checksum errors if enabled and file is PNG
+						if fixPngChecksum && strings.ToLower(filepath.Ext(info.Name())) == ".png" {
+							if fixErr := gontage.FixPngChecksum(path); fixErr != nil {
+								log.Fatalf("Failed to fix PNG checksum for %s: %v (original error: %v)", path, fixErr, err)
+							}
+							// Try to decode again after fixing
+							if reader2, err2 := os.Open(path); err2 == nil {
+								m2, _, err3 := image.Decode(reader2)
+								if err3 != nil {
+									reader2.Close()
+									log.Fatalf("Failed to decode %s even after PNG checksum fix: %v", path, err3)
+								}
+								m = m2
+								reader2.Close()
+							} else {
+								log.Fatalf("Failed to reopen %s after PNG checksum fix: %v", path, err2)
+							}
+						} else {
+							log.Fatal(err)
+						}
+					} else {
+						reader.Close()
 					}
 					bounds := m.Bounds()
 					w, h := bounds.Dx(), bounds.Dy()
 					sprite_height, sprite_width = h, w
 					is_first_sprite_in_directory = false
-					reader.Close()
 				}
 			}
 		}

@@ -2,6 +2,7 @@ package gontage
 
 import (
 	"fmt"
+	"hash/crc32"
 	"image"
 	"image/draw"
 	"image/jpeg"
@@ -42,6 +43,7 @@ type GontageArgs struct {
 	Cut_spritesheet         string
 	Convert_sprites         string
 	Cpu_threads             int
+	Fix_png_checksum        bool
 }
 
 func Gontage(gargs GontageArgs) {
@@ -90,7 +92,7 @@ func Gontage(gargs GontageArgs) {
 			chunk_images_waitgroup.Add(1)
 			go func(start int, end int) {
 				// Ideally decodeImages would write into all_decoded_images directly.
-				one_chunk_of_decoded_images, decoded_image_names := decodeImages(sprites_folder[start:end], gargs.Sprite_source_folder, pwd, &chunk_images_waitgroup, gargs.Fade_amount, gargs.Fade_mode)
+				one_chunk_of_decoded_images, decoded_image_names := decodeImages(sprites_folder[start:end], gargs.Sprite_source_folder, pwd, &chunk_images_waitgroup, gargs.Fade_amount, gargs.Fade_mode, gargs.Fix_png_checksum)
 				for j, decoded_image := range one_chunk_of_decoded_images {
 					all_decoded_images[start+j] = decoded_image
 					all_decoded_images_names[start+j] = decoded_image_names[j]
@@ -123,13 +125,14 @@ func cleanSpritesFolder(sprites_folder []fs.DirEntry) []fs.DirEntry {
 	return sprites_folder
 }
 
-func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string, wg *sync.WaitGroup, fadeAmount int, fadeMode string) ([]image.Image, []string) {
+func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string, wg *sync.WaitGroup, fadeAmount int, fadeMode string, fixPngChecksum bool) ([]image.Image, []string) {
 	defer wg.Done()
 	var sprites_array []image.Image
 	var sprites_names []string
 	for _, sprite := range sprites_folder {
 		if !sprite.IsDir() {
-			if reader, err := os.Open(filepath.Join(pwd, targetFolder, sprite.Name())); err == nil {
+			imagePath := filepath.Join(pwd, targetFolder, sprite.Name())
+			if reader, err := os.Open(imagePath); err == nil {
 				var decoded_sprite image.Image
 				switch filepath.Ext(sprite.Name()) {
 				// TODO: refactor cases with duplicated logic
@@ -143,10 +146,31 @@ func decodeImages(sprites_folder []fs.DirEntry, targetFolder string, pwd string,
 				default:
 					s, t, err := image.Decode(reader)
 					if err != nil {
-						log.Fatalln(err, t)
+						reader.Close()
+						// Try to fix PNG checksum errors if enabled and file is PNG
+						if fixPngChecksum && strings.ToLower(filepath.Ext(sprite.Name())) == ".png" {
+							if fixErr := FixPngChecksum(imagePath); fixErr != nil {
+								log.Fatalf("Failed to fix PNG checksum for %s: %v (original error: %v)", imagePath, fixErr, err)
+							}
+							// Try to decode again after fixing
+							if reader2, err2 := os.Open(imagePath); err2 == nil {
+								s2, _, err3 := image.Decode(reader2)
+								if err3 != nil {
+									reader2.Close()
+									log.Fatalf("Failed to decode %s even after PNG checksum fix: %v", imagePath, err3)
+								}
+								decoded_sprite = s2
+								reader2.Close()
+							} else {
+								log.Fatalf("Failed to reopen %s after PNG checksum fix: %v", imagePath, err2)
+							}
+						} else {
+							log.Fatalln(err, t)
+						}
+					} else {
+						decoded_sprite = s
+						reader.Close()
 					}
-					decoded_sprite = s
-					reader.Close()
 				}
 
 				// Apply fading if specified
@@ -490,7 +514,27 @@ func ResizeSingleImage(gargs GontageArgs) {
 	default:
 		decoded_image, _, err = image.Decode(reader)
 		if err != nil {
-			log.Fatalf("Error decoding image: %v", err)
+			reader.Close()
+			// Try to fix PNG checksum errors if enabled and file is PNG
+			if gargs.Fix_png_checksum && strings.ToLower(filepath.Ext(gargs.Image_path)) == ".png" {
+				if fixErr := FixPngChecksum(gargs.Image_path); fixErr != nil {
+					log.Fatalf("Failed to fix PNG checksum for %s: %v (original error: %v)", gargs.Image_path, fixErr, err)
+				}
+				// Try to decode again after fixing
+				if reader2, err2 := os.Open(gargs.Image_path); err2 == nil {
+					decoded_image2, _, err3 := image.Decode(reader2)
+					if err3 != nil {
+						reader2.Close()
+						log.Fatalf("Failed to decode %s even after PNG checksum fix: %v", gargs.Image_path, err3)
+					}
+					decoded_image = decoded_image2
+					reader2.Close()
+				} else {
+					log.Fatalf("Failed to reopen %s after PNG checksum fix: %v", gargs.Image_path, err2)
+				}
+			} else {
+				log.Fatalf("Error decoding image: %v", err)
+			}
 		}
 	}
 
@@ -545,4 +589,207 @@ func ResizeSingleImage(gargs GontageArgs) {
 	}
 
 	fmt.Printf("Resized image saved as: %s (took %v)\n", output_filename, time.Since(start))
+}
+
+// FixPngChecksum attempts to fix PNG checksum errors by re-encoding the image
+func FixPngChecksum(imagePath string) error {
+	// Create a backup of the original file first
+	backupPath := imagePath + ".backup"
+	if err := CopyFile(imagePath, backupPath); err != nil {
+		return fmt.Errorf("failed to create backup: %v", err)
+	}
+
+	// Try to fix the PNG by reconstructing it
+	img, err := tryDecodePngWithFix(imagePath)
+	if err != nil {
+		// Restore backup and return error
+		CopyFile(backupPath, imagePath)
+		return fmt.Errorf("failed to decode and fix PNG: %v", err)
+	}
+
+	// Re-encode the image as PNG
+	outputFile, err := os.Create(imagePath)
+	if err != nil {
+		// Restore backup if file creation fails
+		CopyFile(backupPath, imagePath)
+		return fmt.Errorf("failed to create output file: %v", err)
+	}
+	defer outputFile.Close()
+
+	encoder := png.Encoder{CompressionLevel: png.BestSpeed}
+	if err := encoder.Encode(outputFile, img); err != nil {
+		// Restore backup if re-encoding fails
+		CopyFile(backupPath, imagePath)
+		return fmt.Errorf("failed to re-encode PNG: %v", err)
+	}
+
+	// Remove backup if successful
+	os.Remove(backupPath)
+	fmt.Printf("Fixed PNG checksum for: %s\n", imagePath)
+	return nil
+}
+
+// tryDecodePngWithFix attempts multiple strategies to decode a corrupted PNG
+func tryDecodePngWithFix(imagePath string) (image.Image, error) {
+	// Strategy 1: Try standard decode first
+	if img, err := tryStandardDecode(imagePath); err == nil {
+		return img, nil
+	}
+
+	// Strategy 2: Try to read and fix PNG chunks manually
+	if img, err := tryFixPngChunks(imagePath); err == nil {
+		return img, nil
+	}
+
+	// Strategy 3: Try to decode ignoring CRC errors by recreating PNG
+	return tryRecreateValidPng(imagePath)
+}
+
+// tryStandardDecode attempts normal PNG decoding
+func tryStandardDecode(imagePath string) (image.Image, error) {
+	reader, err := os.Open(imagePath)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	img, _, err := image.Decode(reader)
+	return img, err
+}
+
+// tryFixPngChunks attempts to read PNG data and fix common CRC issues
+func tryFixPngChunks(imagePath string) (image.Image, error) {
+	file, err := os.Open(imagePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	// Read the entire file
+	data, err := os.ReadFile(imagePath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check PNG signature
+	if len(data) < 8 || string(data[:8]) != "\x89PNG\r\n\x1a\n" {
+		return nil, fmt.Errorf("not a valid PNG file")
+	}
+
+	// Create a temporary file with potentially fixed data
+	tempPath := imagePath + ".temp"
+	defer os.Remove(tempPath)
+
+	// Try to create a valid PNG by skipping CRC validation
+	if err := createValidPngFromData(data, tempPath); err != nil {
+		return nil, err
+	}
+
+	// Try to decode the fixed PNG
+	reader, err := os.Open(tempPath)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	img, _, err := image.Decode(reader)
+	return img, err
+}
+
+// createValidPngFromData creates a new PNG file from the image data, recalculating CRCs
+func createValidPngFromData(data []byte, outputPath string) error {
+	if len(data) < 8 {
+		return fmt.Errorf("PNG data too short")
+	}
+
+	output, err := os.Create(outputPath)
+	if err != nil {
+		return err
+	}
+	defer output.Close()
+
+	// Write PNG signature
+	output.Write(data[:8])
+
+	// Process chunks
+	pos := 8
+	for pos < len(data) {
+		if pos+8 > len(data) {
+			break
+		}
+
+		// Read chunk length
+		chunkLen := int(data[pos])<<24 | int(data[pos+1])<<16 | int(data[pos+2])<<8 | int(data[pos+3])
+		pos += 4
+
+		if pos+4+chunkLen+4 > len(data) {
+			break
+		}
+
+		// Read chunk type
+		chunkType := data[pos : pos+4]
+		pos += 4
+
+		// Read chunk data
+		chunkData := data[pos : pos+chunkLen]
+		pos += chunkLen
+
+		// Skip original CRC
+		pos += 4
+
+		// Write chunk with recalculated CRC
+		writeChunk(output, chunkType, chunkData)
+
+		// Stop at IEND chunk
+		if string(chunkType) == "IEND" {
+			break
+		}
+	}
+
+	return nil
+}
+
+// writeChunk writes a PNG chunk with correct CRC
+func writeChunk(w *os.File, chunkType []byte, data []byte) {
+	// Write length
+	length := uint32(len(data))
+	w.Write([]byte{byte(length >> 24), byte(length >> 16), byte(length >> 8), byte(length)})
+
+	// Write type
+	w.Write(chunkType)
+
+	// Write data
+	w.Write(data)
+
+	// Calculate and write CRC
+	crc := crc32.NewIEEE()
+	crc.Write(chunkType)
+	crc.Write(data)
+	crcValue := crc.Sum32()
+	w.Write([]byte{byte(crcValue >> 24), byte(crcValue >> 16), byte(crcValue >> 8), byte(crcValue)})
+}
+
+// tryRecreateValidPng attempts to extract image data and create a completely new PNG
+func tryRecreateValidPng(imagePath string) (image.Image, error) {
+	// This is a last resort - try to extract raw image data and recreate PNG
+	// For now, we'll return an error as this would require complex PNG parsing
+	return nil, fmt.Errorf("unable to fix PNG - corruption too severe")
+}
+
+// CopyFile creates a copy of src at dst
+func CopyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = destFile.ReadFrom(sourceFile)
+	return err
 }

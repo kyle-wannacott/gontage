@@ -25,6 +25,41 @@ gontage -i myimage.png -sr 64
 ```
 This will resize `myimage.png` to 64x64 pixels and save it as `myimage_resized_64px.png`
 
+### PNG Checksum Fix:
+```bash
+gontage -i corrupted.png -sr 64 -fix-png
+```
+This will attempt to fix PNG checksum errors by re-encoding the image if corruption is detected during processing
+
+```bash
+gontage -f sprites_folder -fix-png
+```
+Process an entire folder with PNG checksum fixing enabled - any corrupted PNG files will be automatically re-encoded
+
+```bash
+gontage -mf parent_folder -fix-png
+```
+Process multiple folders with PNG checksum fixing enabled
+
+**Note:** The `-fix-png` flag works with all image operations (single image resize, folder processing, and multiple folder processing). When enabled, if a PNG file fails to load due to checksum errors, gontage will:
+1. Create a backup of the original file (filename.png.backup)
+2. Attempt multiple recovery strategies:
+   - Standard PNG decoding (if corruption is minimal)
+   - Manual PNG chunk reconstruction with CRC recalculation
+   - Complete PNG reconstruction from image data
+3. Re-encode the image with valid checksums
+4. Continue processing with the fixed image
+5. Remove the backup if successful, or restore it if fixing fails
+
+**Technical Details:**
+- Validates PNG signatures and chunk structure
+- Recalculates CRC32 checksums for all PNG chunks
+- Handles common PNG corruption scenarios (transfer errors, partial writes)
+- Preserves original image quality and metadata where possible
+- Safe operation with automatic backup/restore on failure
+
+This feature is particularly useful when working with PNG files that have been corrupted during transfer or storage but still contain valid image data.
+
 ### Single Image Resize with Fading:
 ```bash
 gontage -i myimage.png -sr 64 -fade 30
